@@ -1,5 +1,5 @@
-﻿import { useState } from 'react';
-import { Plus, Pencil, Trash2, Dumbbell } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Pencil, Trash2, Dumbbell, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useActivities }     from '../../hooks/useActivities';
 import { activityService }   from '../../services/activityService';
 import Button   from '../../components/ui/Button';
@@ -20,6 +20,10 @@ export default function ManageActivitiesPage() {
   const [deleteId,  setDeleteId]  = useState<number | null>(null);
   const [deleting,  setDeleting]  = useState(false);
   const [toast,     setToast]     = useState<{ ok: boolean; msg: string } | null>(null);
+  const [search,    setSearch]    = useState('');
+  const [durFilter, setDurFilter] = useState<string>('');
+  const [page,      setPage]      = useState(1);
+  const [pageSize,  setPageSize]  = useState(15);
 
   function showToast(ok: boolean, msg: string) {
     setToast({ ok, msg });
@@ -74,10 +78,26 @@ export default function ManageActivitiesPage() {
 
   const canSave = form.name.trim() !== '' && form.durationMinutes > 0;
 
+  const DUR_OPTIONS = [
+    { label: 'Any Duration', value: '' },
+    { label: '30 min', value: '30' },
+    { label: '60 min', value: '60' },
+    { label: '90 min', value: '90' },
+    { label: '120 min', value: '120' },
+  ];
+
+  const filtered = activities.filter(a => {
+    const matchName = !search || a.name.toLowerCase().includes(search.toLowerCase());
+    const matchDur  = !durFilter || a.durationMinutes === Number(durFilter);
+    return matchName && matchDur;
+  });
+  const totalPagesA = Math.ceil(filtered.length / pageSize);
+  const pagedA      = filtered.slice((page - 1) * pageSize, page * pageSize);
+
   if (loading) return <Spinner fullPage />;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5">
+    <div className="w-[80%] mx-auto space-y-5">
       {toast && (
         <div className={`px-4 py-3 rounded-lg text-sm font-medium border
           ${toast.ok
@@ -106,7 +126,38 @@ export default function ManageActivitiesPage() {
         <p className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{loadErr}</p>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Filter bar */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_4px_0_rgb(0_0_0_/_0.06)] px-4 py-3 flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Search by activity name..."
+            className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-gray-200
+              focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20 focus:border-[#0078D7] placeholder:text-gray-400" />
+        </div>
+        <select value={durFilter} onChange={e => { setDurFilter(e.target.value); setPage(1); }}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20">
+          {DUR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        {(search || durFilter) && (
+          <button onClick={() => { setSearch(''); setDurFilter(''); setPage(1); }}
+            className="text-xs text-gray-400 hover:text-red-500 transition-colors">Clear</button>
+        )}
+        <span className="text-xs text-gray-400 ml-auto">{filtered.length} of {activities.length}</span>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_4px_0_rgb(0_0_0_/_0.06)] overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <p className="text-sm font-medium text-gray-700">{filtered.length} activit{filtered.length !== 1 ? 'ies' : 'y'}</p>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>Show</span>
+            <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none">
+              {[10, 15, 20, 25, 30, 50].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <span>per page</span>
+          </div>
+        </div>
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
@@ -116,9 +167,9 @@ export default function ManageActivitiesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {activities.length === 0 ? (
-              <tr><td colSpan={4} className="py-10 text-center text-gray-400 text-sm">No activities yet.</td></tr>
-            ) : activities.map(a => (
+            {pagedA.length === 0 ? (
+              <tr><td colSpan={4} className="py-10 text-center text-gray-400 text-sm">No activities found.</td></tr>
+            ) : pagedA.map(a => (
               <tr key={a.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-3 text-gray-400 text-xs">{a.id}</td>
                 <td className="px-4 py-3 font-medium text-gray-800">{a.name}</td>
@@ -141,6 +192,31 @@ export default function ManageActivitiesPage() {
             ))}
           </tbody>
         </table>
+        {totalPagesA > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/40">
+            <span className="text-xs text-gray-400">Page {page} of {totalPagesA}</span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-40">
+                <ChevronLeft size={13} />
+              </button>
+              {Array.from({ length: Math.min(5, totalPagesA) }, (_, i) => {
+                const start = Math.max(1, Math.min(page - 2, totalPagesA - 4));
+                const pg = start + i;
+                return (
+                  <button key={pg} onClick={() => setPage(pg)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                      pg === page ? 'bg-[#0078D7] text-white border-[#0078D7]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}>{pg}</button>
+                );
+              })}
+              <button onClick={() => setPage(p => Math.min(totalPagesA, p + 1))} disabled={page === totalPagesA}
+                className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-40">
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Modal

@@ -9,6 +9,7 @@ import Spinner from '../../components/ui/Spinner';
 // â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_NAME_TO_IDX: Record<string, number> = Object.fromEntries(DAY_NAMES.map((d, i) => [d, i]));
 
 // â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -166,8 +167,15 @@ function HoursTab({ venueId, showToast }: { venueId: number; showToast: (ok: boo
     venueService.getHours(venueId)
       .then(data => {
         if (data.length > 0) {
+          // Normalise API string dayOfWeek ("Monday") → numeric index (1)
+          const normalised = data.map(d => ({
+            ...d,
+            dayOfWeek: typeof d.dayOfWeek === 'string'
+              ? (DAY_NAME_TO_IDX[d.dayOfWeek] ?? d.dayOfWeek)
+              : d.dayOfWeek,
+          }));
           setHours(prev => prev.map(h => {
-            const saved = data.find(d => d.dayOfWeek === h.dayOfWeek);
+            const saved = normalised.find(d => d.dayOfWeek === h.dayOfWeek);
             return saved ?? h;
           }));
         }
@@ -176,7 +184,7 @@ function HoursTab({ venueId, showToast }: { venueId: number; showToast: (ok: boo
       .finally(() => setLoading(false));
   }, [venueId]); // eslint-disable-line
 
-  function update(day: number, field: keyof VenueOperatingHours, val: unknown) {
+  function update(day: number | string, field: keyof VenueOperatingHours, val: unknown) {
     setHours(h => h.map(r => r.dayOfWeek === day ? { ...r, [field]: val } : r));
   }
 
@@ -207,7 +215,7 @@ function HoursTab({ venueId, showToast }: { venueId: number; showToast: (ok: boo
           <tbody className="divide-y divide-gray-100">
             {hours.map(h => (
               <tr key={h.dayOfWeek} className={h.isClosed ? 'opacity-50' : ''}>
-                <td className="px-4 py-2.5 font-medium text-gray-700 w-28">{DAY_NAMES[h.dayOfWeek]}</td>
+                <td className="px-4 py-2.5 font-medium text-gray-700 w-28">{DAY_NAMES[h.dayOfWeek as number] ?? h.dayOfWeek}</td>
                 <td className="px-4 py-2.5">
                   <input
                     type="time"
@@ -279,7 +287,7 @@ export default function OrgVenueProfilePage() {
   if (loading) return <Spinner fullPage />;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
+    <div className="w-[80%] mx-auto space-y-5">
       {/* Header */}
       <div>
         <h2 className="text-xl font-bold text-gray-900">Venue Profile</h2>

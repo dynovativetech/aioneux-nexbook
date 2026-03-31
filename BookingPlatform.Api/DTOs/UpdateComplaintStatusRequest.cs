@@ -8,8 +8,11 @@ namespace BookingPlatform.Api.DTOs
         [Required]
         public ComplaintStatus Status { get; set; }
 
-        /// <summary>Optional note explaining the status change (visible as a system comment).</summary>
-        [MaxLength(1000)]
+        /// <summary>Admin user performing the status change (for system comment attribution).</summary>
+        public int? AdminId { get; set; }
+
+        /// <summary>Optional note explaining the status change (saved as a system comment).</summary>
+        [MaxLength(2000)]
         public string? AdminNote { get; set; }
     }
 }

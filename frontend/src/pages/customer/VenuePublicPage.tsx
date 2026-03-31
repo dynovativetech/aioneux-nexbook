@@ -1,15 +1,19 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   MapPin, Phone, Mail, Globe, Clock, Building2,
   ChevronLeft, ChevronRight, Layers, CheckCircle2, ArrowRight,
+  X, ZoomIn, ZoomOut, Maximize2, Images,
 } from 'lucide-react';
 import { venueService, type VenueDetail } from '../../services/venueService';
 import { facilityService } from '../../services/facilityService';
 import type { Facility } from '../../types';
 import Spinner from '../../components/ui/Spinner';
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// The API serializes DayOfWeek as a string ("Sunday", "Monday", …) via JsonStringEnumConverter
+const DAY_ORDERED = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_SORT: Record<string, number> = Object.fromEntries(DAY_ORDERED.map((d, i) => [d, i]));
+const TODAY_NAME = DAY_ORDERED[new Date().getDay()];
 
 const AMENITY_LABELS: Record<number, string> = {
   0: 'Parking', 1: 'Indoor AC', 2: 'Male Washroom', 3: 'Female Washroom',
@@ -22,25 +26,250 @@ const AMENITY_ICONS: Record<number, string> = {
   5: '📶', 6: '👕', 7: '🔒', 8: '☕', 9: '🩺',
 };
 
-// ── Image Gallery ─────────────────────────────────────────────────────────────
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+
+type GalleryImage = VenueDetail['images'][number];
+
+function Lightbox({
+  images, startIndex, onClose,
+}: {
+  images: GalleryImage[];
+  startIndex: number;
+  onClose: () => void;
+}) {
+  const [idx,      setIdx]      = useState(startIndex);
+  const [zoom,     setZoom]     = useState(1);
+  const [pan,      setPan]      = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef({ mx: 0, my: 0, px: 0, py: 0 });
+  const imgRef    = useRef<HTMLImageElement>(null);
+  const MIN_ZOOM  = 1;
+  const MAX_ZOOM  = 4;
+
+  const img = images[idx];
+
+  const resetZoom = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+  const prev = useCallback(() => { if (idx > 0)                   { setIdx(i => i - 1); resetZoom(); } }, [idx]);
+  const next = useCallback(() => { if (idx < images.length - 1)  { setIdx(i => i + 1); resetZoom(); } }, [idx, images.length]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape')      onClose();
+      if (e.key === 'ArrowLeft')   prev();
+      if (e.key === 'ArrowRight')  next();
+      if (e.key === '+' || e.key === '=') setZoom(z => Math.min(MAX_ZOOM, +(z + 0.5).toFixed(1)));
+      if (e.key === '-')           setZoom(z => { const nz = Math.max(MIN_ZOOM, +(z - 0.5).toFixed(1)); if (nz === 1) setPan({ x: 0, y: 0 }); return nz; });
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [prev, next, onClose]);
+
+  // Scroll to thumbnail when idx changes
+  const thumbsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = thumbsRef.current?.children[idx] as HTMLElement | undefined;
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [idx]);
+
+  // Mouse wheel zoom
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.25 : 0.25;
+    setZoom(z => {
+      const nz = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z + delta).toFixed(2)));
+      if (nz === 1) setPan({ x: 0, y: 0 });
+      return nz;
+    });
+  };
+
+  // Drag to pan (only when zoomed)
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (zoom <= 1) return;
+    setDragging(true);
+    dragStart.current = { mx: e.clientX, my: e.clientY, px: pan.x, py: pan.y };
+  };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!dragging) return;
+    setPan({
+      x: dragStart.current.px + (e.clientX - dragStart.current.mx),
+      y: dragStart.current.py + (e.clientY - dragStart.current.my),
+    });
+  };
+  const onMouseUp = () => setDragging(false);
+
+  const zoomIn  = () => setZoom(z => Math.min(MAX_ZOOM, +(z + 0.5).toFixed(1)));
+  const zoomOut = () => setZoom(z => { const nz = Math.max(MIN_ZOOM, +(z - 0.5).toFixed(1)); if (nz === 1) setPan({ x: 0, y: 0 }); return nz; });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-sm"
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+    >
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between px-5 py-3 flex-shrink-0 border-b border-white/10">
+        <span className="text-white/60 text-sm">
+          <span className="text-white font-semibold">{idx + 1}</span>
+          <span className="mx-1">/</span>
+          {images.length}
+        </span>
+        {img.caption && (
+          <p className="text-white/80 text-sm truncate max-w-xs hidden sm:block">{img.caption}</p>
+        )}
+        <div className="flex items-center gap-1">
+          {/* Zoom controls */}
+          <button onClick={zoomOut} disabled={zoom <= MIN_ZOOM}
+            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white disabled:opacity-30 transition-colors" title="Zoom out (-)">
+            <ZoomOut size={15} />
+          </button>
+          <span className="text-white/60 text-xs w-10 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+          <button onClick={zoomIn} disabled={zoom >= MAX_ZOOM}
+            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white disabled:opacity-30 transition-colors" title="Zoom in (+)">
+            <ZoomIn size={15} />
+          </button>
+          {zoom > 1 && (
+            <button onClick={resetZoom}
+              className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors ml-1" title="Reset zoom">
+              <Maximize2 size={13} />
+            </button>
+          )}
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-red-500/80 flex items-center justify-center text-white transition-colors ml-2" title="Close (Esc)">
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Main image area ── */}
+      <div
+        className="flex-1 flex items-center justify-center relative overflow-hidden"
+        onWheel={handleWheel}
+        style={{ cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : 'default' }}
+      >
+        {/* Prev arrow */}
+        {images.length > 1 && (
+          <button onClick={prev} disabled={idx === 0}
+            className="absolute left-3 sm:left-5 z-10 w-11 h-11 rounded-full bg-white/10 hover:bg-white/25 border border-white/20 flex items-center justify-center text-white disabled:opacity-20 transition-all hover:-translate-x-0.5">
+            <ChevronLeft size={22} />
+          </button>
+        )}
+
+        {/* Image */}
+        <div
+          className="select-none"
+          onMouseDown={onMouseDown}
+          style={{
+            transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
+            transition: dragging ? 'none' : 'transform 0.15s ease',
+            transformOrigin: 'center center',
+          }}
+        >
+          <img
+            ref={imgRef}
+            src={img.url}
+            alt={img.caption ?? `Image ${idx + 1}`}
+            draggable={false}
+            className="max-h-[calc(100vh-180px)] max-w-[calc(100vw-100px)] object-contain rounded-lg shadow-2xl"
+          />
+        </div>
+
+        {/* Next arrow */}
+        {images.length > 1 && (
+          <button onClick={next} disabled={idx === images.length - 1}
+            className="absolute right-3 sm:right-5 z-10 w-11 h-11 rounded-full bg-white/10 hover:bg-white/25 border border-white/20 flex items-center justify-center text-white disabled:opacity-20 transition-all hover:translate-x-0.5">
+            <ChevronRight size={22} />
+          </button>
+        )}
+      </div>
+
+      {/* ── Thumbnail strip ── */}
+      {images.length > 1 && (
+        <div className="flex-shrink-0 border-t border-white/10 py-3 px-4">
+          <div ref={thumbsRef} className="flex gap-2 overflow-x-auto scrollbar-hide justify-center flex-wrap sm:flex-nowrap">
+            {images.map((im, i) => (
+              <button
+                key={im.id}
+                onClick={() => { setIdx(i); resetZoom(); }}
+                className={`flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition-all ${
+                  i === idx
+                    ? 'border-[#0078D7] shadow-[0_0_0_2px_rgb(0_120_215_/_0.4)] opacity-100 scale-105'
+                    : 'border-white/20 opacity-40 hover:opacity-80 hover:border-white/40'
+                }`}
+              >
+                <img src={im.url} alt="" draggable={false} className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+          <p className="text-center text-white/30 text-[10px] mt-2 hidden sm:block">
+            ← → navigate · scroll to zoom · drag to pan · Esc to close
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Image Gallery (hero slider + thumbnails) ──────────────────────────────────
 
 function ImageGallery({ images, coverImageUrl, name }: {
   images: VenueDetail['images'];
   coverImageUrl?: string;
   name: string;
 }) {
-  const allImages = images.length > 0
+  const allImages: GalleryImage[] = images.length > 0
     ? images
     : coverImageUrl
       ? [{ id: 0, url: coverImageUrl, isPrimary: true, fileName: '', originalFileName: '', caption: undefined, sortOrder: 0 }]
       : [];
 
-  const [activeIdx, setActiveIdx] = useState(0);
+  const [activeIdx,    setActiveIdx]    = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIdx,  setLightboxIdx]  = useState(0);
+  const [paused,       setPaused]       = useState(false);
+  const [animDir,      setAnimDir]      = useState<'left' | 'right'>('right');
+  const [transitioning, setTransitioning] = useState(false);
+  const thumbsRef = useRef<HTMLDivElement>(null);
+  const SLIDE_INTERVAL = 3000;
+
+  const goTo = useCallback((next: number, dir: 'left' | 'right' = 'right') => {
+    if (transitioning) return;
+    setAnimDir(dir);
+    setTransitioning(true);
+    setTimeout(() => {
+      setActiveIdx(next);
+      setTransitioning(false);
+    }, 320);
+  }, [transitioning]);
+
+  const prev = useCallback(() => {
+    goTo(activeIdx === 0 ? allImages.length - 1 : activeIdx - 1, 'left');
+  }, [activeIdx, allImages.length, goTo]);
+
+  const next = useCallback(() => {
+    goTo(activeIdx === allImages.length - 1 ? 0 : activeIdx + 1, 'right');
+  }, [activeIdx, allImages.length, goTo]);
+
+  // Auto-slideshow every 3 s
+  useEffect(() => {
+    if (allImages.length <= 1 || paused) return;
+    const t = setInterval(next, SLIDE_INTERVAL);
+    return () => clearInterval(t);
+  }, [allImages.length, next, paused]);
+
+  // Scroll active thumbnail into view
+  useEffect(() => {
+    const el = thumbsRef.current?.children[activeIdx] as HTMLElement | undefined;
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [activeIdx]);
+
+  const openAt = (i: number) => { setLightboxIdx(i); setLightboxOpen(true); };
 
   if (allImages.length === 0) {
     return (
-      <div className="h-64 sm:h-80 bg-gradient-to-br from-[#e6f3fc] to-gray-100 rounded-2xl flex items-center justify-center">
-        <Building2 size={48} className="text-gray-200" />
+      <div className="h-64 sm:h-[420px] bg-gradient-to-br from-[#e6f3fc] to-gray-100 rounded-2xl flex items-center justify-center">
+        <Building2 size={56} className="text-gray-200" />
       </div>
     );
   }
@@ -48,55 +277,146 @@ function ImageGallery({ images, coverImageUrl, name }: {
   const active = allImages[activeIdx];
 
   return (
-    <div className="space-y-2">
-      <div className="relative h-64 sm:h-80 rounded-2xl overflow-hidden bg-gray-100">
-        <img src={active.url} alt={active.caption ?? name} className="w-full h-full object-cover" />
-        {allImages.length > 1 && (
-          <>
-            <button
-              onClick={() => setActiveIdx(i => Math.max(0, i - 1))}
-              disabled={activeIdx === 0}
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow hover:bg-white disabled:opacity-40 transition"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => setActiveIdx(i => Math.min(allImages.length - 1, i + 1))}
-              disabled={activeIdx === allImages.length - 1}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow hover:bg-white disabled:opacity-40 transition"
-            >
-              <ChevronRight size={16} />
-            </button>
-            <div className="absolute bottom-3 right-3 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
-              {activeIdx + 1} / {allImages.length}
+    <>
+      <div
+        className="space-y-2"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+      >
+        {/* ── Hero banner ── */}
+        <div className="relative h-64 sm:h-[400px] rounded-2xl overflow-hidden bg-gray-900 select-none">
+
+          {/* Image with slide animation */}
+          <img
+            key={activeIdx}
+            src={active.url}
+            alt={active.caption ?? name}
+            onClick={() => openAt(activeIdx)}
+            draggable={false}
+            className={`absolute inset-0 w-full h-full object-cover cursor-zoom-in transition-opacity duration-300 ${
+              transitioning ? 'opacity-0' : 'opacity-100'
+            }`}
+            style={{
+              transform: transitioning
+                ? `translateX(${animDir === 'right' ? '-6%' : '6%'})`
+                : 'translateX(0)',
+              transition: 'opacity 0.32s ease, transform 0.32s ease',
+            }}
+          />
+
+          {/* Dark gradient overlays */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10 pointer-events-none" />
+
+          {/* Left / Right arrows */}
+          {allImages.length > 1 && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); prev(); }}
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 hover:bg-black/65 border border-white/20 flex items-center justify-center text-white transition-all hover:-translate-x-0.5 hover:scale-110 backdrop-blur-sm"
+                aria-label="Previous"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); next(); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 hover:bg-black/65 border border-white/20 flex items-center justify-center text-white transition-all hover:translate-x-0.5 hover:scale-110 backdrop-blur-sm"
+                aria-label="Next"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </>
+          )}
+
+          {/* Dot indicators */}
+          {allImages.length > 1 && allImages.length <= 10 && (
+            <div className="absolute bottom-14 left-1/2 -translate-x-1/2 flex gap-1.5">
+              {allImages.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => goTo(i, i > activeIdx ? 'right' : 'left')}
+                  className={`rounded-full transition-all duration-300 ${
+                    i === activeIdx
+                      ? 'w-5 h-1.5 bg-white'
+                      : 'w-1.5 h-1.5 bg-white/50 hover:bg-white/80'
+                  }`}
+                />
+              ))}
             </div>
-          </>
-        )}
-        {active.caption && (
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-4 py-3">
-            <p className="text-white text-xs">{active.caption}</p>
+          )}
+
+          {/* Bottom overlay row: counter + "Show all" + auto-play indicator */}
+          <div className="absolute bottom-0 left-0 right-0 px-4 py-3 flex items-center justify-between">
+            {/* Counter */}
+            <span className="text-white/80 text-xs font-medium bg-black/30 px-2.5 py-1 rounded-full backdrop-blur-sm">
+              {activeIdx + 1} / {allImages.length}
+            </span>
+
+            {/* Caption */}
+            {active.caption && (
+              <span className="text-white/90 text-xs bg-black/30 px-2.5 py-1 rounded-full backdrop-blur-sm max-w-[40%] truncate hidden sm:block">
+                {active.caption}
+              </span>
+            )}
+
+            {/* Show all photos button */}
+            {allImages.length > 1 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); openAt(0); }}
+                className="flex items-center gap-1.5 bg-white/90 hover:bg-white text-gray-800 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all shadow-md border border-white/20 backdrop-blur-sm"
+              >
+                <Images size={12} className="text-[#0078D7]" />
+                All {allImages.length} photos
+              </button>
+            )}
+          </div>
+
+          {/* Auto-play progress bar */}
+          {allImages.length > 1 && !paused && (
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/20 overflow-hidden rounded-t-2xl">
+              <div
+                key={`${activeIdx}-prog`}
+                className="h-full bg-white/70 rounded-full"
+                style={{
+                  animation: `galleryProgress ${SLIDE_INTERVAL}ms linear`,
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ── Thumbnail strip ── */}
+        {allImages.length > 1 && (
+          <div ref={thumbsRef} className="flex gap-2 overflow-x-auto pb-1 scroll-smooth">
+            {allImages.map((img, i) => (
+              <button
+                key={img.id}
+                onClick={() => goTo(i, i > activeIdx ? 'right' : 'left')}
+                className={`flex-shrink-0 w-[72px] h-[52px] sm:w-20 sm:h-[58px] rounded-xl overflow-hidden border-2 transition-all duration-200 ${
+                  i === activeIdx
+                    ? 'border-[#0078D7] shadow-[0_2px_10px_-2px_rgb(0_120_215_/_0.50)] scale-105 opacity-100'
+                    : 'border-transparent opacity-55 hover:opacity-90 hover:scale-[1.03]'
+                }`}
+              >
+                <img src={img.url} alt="" draggable={false} className="w-full h-full object-cover" />
+              </button>
+            ))}
           </div>
         )}
       </div>
 
-      {allImages.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {allImages.map((img, i) => (
-            <button
-              key={img.id}
-              onClick={() => setActiveIdx(i)}
-              className={`flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${
-                i === activeIdx
-                  ? 'border-[#0078D7] shadow-[0_2px_8px_-2px_rgb(0_120_215_/_0.40)]'
-                  : 'border-transparent opacity-60 hover:opacity-100'
-              }`}
-            >
-              <img src={img.url} alt="" className="w-full h-full object-cover" />
-            </button>
-          ))}
-        </div>
+      {/* Inject progress-bar keyframe once */}
+      <style>{`
+        @keyframes galleryProgress {
+          from { width: 0%; }
+          to   { width: 100%; }
+        }
+      `}</style>
+
+      {/* ── Lightbox ── */}
+      {lightboxOpen && (
+        <Lightbox images={allImages} startIndex={lightboxIdx} onClose={() => setLightboxOpen(false)} />
       )}
-    </div>
+    </>
   );
 }
 
@@ -182,7 +502,7 @@ export default function VenuePublicPage() {
 
   if (loading) return <Spinner fullPage />;
   if (!venue) return (
-    <div className="max-w-3xl mx-auto py-20 text-center">
+    <div className="w-[80%] mx-auto py-20 text-center">
       <Building2 size={40} className="mx-auto mb-3 text-gray-200" />
       <p className="text-gray-500">Venue not found.</p>
       <button onClick={() => navigate('/venues')} className="mt-4 text-sm text-[#0078D7] hover:underline font-medium">
@@ -191,10 +511,10 @@ export default function VenuePublicPage() {
     </div>
   );
 
-  const todayHours = venue.operatingHours?.find(h => h.dayOfWeek === new Date().getDay());
+  const todayHours = venue.operatingHours?.find(h => String(h.dayOfWeek) === TODAY_NAME);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="w-[80%] mx-auto space-y-6">
 
       {/* Back link */}
       <button
@@ -314,26 +634,45 @@ export default function VenuePublicPage() {
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <Clock size={14} className="text-[#0078D7]" /> Opening Hours
               </h3>
-              <div className="space-y-1">
-                {[...venue.operatingHours].sort((a, b) => a.dayOfWeek - b.dayOfWeek).map(h => {
-                  const isToday = h.dayOfWeek === new Date().getDay();
-                  return (
-                    <div
-                      key={h.dayOfWeek}
-                      className={`flex items-center gap-3 text-xs py-1.5 px-2 rounded-xl ${
-                        isToday ? 'bg-[#e6f3fc] text-[#025DB6] font-semibold' : 'text-gray-600'
-                      }`}
-                    >
-                      <span className="w-8 shrink-0">{DAY_NAMES[h.dayOfWeek]}</span>
-                      {isToday && <span className="text-[#0078D7] text-[10px] font-medium">(today)</span>}
-                      <span className="ml-auto">
-                        {h.isClosed
-                          ? <span className="text-red-500 font-medium">Closed</span>
-                          : `${h.openTime.slice(0, 5)} – ${h.closeTime.slice(0, 5)}`}
-                      </span>
-                    </div>
-                  );
-                })}
+              <div className="divide-y divide-gray-50">
+                {[...venue.operatingHours]
+                  .sort((a, b) => (DAY_SORT[String(a.dayOfWeek)] ?? 0) - (DAY_SORT[String(b.dayOfWeek)] ?? 0))
+                  .map(h => {
+                    const dayName = String(h.dayOfWeek); // already "Monday", "Tuesday" etc.
+                    const isToday = dayName === TODAY_NAME;
+                    return (
+                      <div
+                        key={dayName}
+                        className={`flex items-center justify-between gap-2 py-2 px-2.5 rounded-xl text-xs ${
+                          isToday
+                            ? 'bg-[#e6f3fc] text-[#025DB6] font-semibold my-0.5'
+                            : 'text-gray-600'
+                        }`}
+                      >
+                        {/* Day name (from API — already full English name) */}
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-medium w-[80px] flex-shrink-0">{dayName}</span>
+                          {isToday && (
+                            <span className="text-[9px] bg-[#0078D7] text-white px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide leading-none whitespace-nowrap">
+                              Today
+                            </span>
+                          )}
+                        </span>
+
+                        {/* Time or Closed */}
+                        <span className="flex-shrink-0 tabular-nums">
+                          {h.isClosed
+                            ? <span className="text-red-500 font-semibold">Closed</span>
+                            : <span>
+                                {h.openTime.slice(0, 5)}
+                                <span className="text-gray-400 mx-1">–</span>
+                                {h.closeTime.slice(0, 5)}
+                              </span>
+                          }
+                        </span>
+                      </div>
+                    );
+                  })}
               </div>
               {todayHours && !todayHours.isClosed && (
                 <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">

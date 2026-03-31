@@ -166,7 +166,7 @@ export default function NotificationSettingsPage() {
   if (loading) return <Spinner fullPage />;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="w-[80%] mx-auto space-y-6">
 
       {/* â”€â”€ Email Provider â”€â”€ */}
       <SectionCard icon={Mail} title="Email Provider">
@@ -305,7 +305,7 @@ export default function NotificationSettingsPage() {
               className="flex items-center gap-1.5"
             >
               <Save size={13} />
-              {savingEmail ? 'Savingâ€¦' : 'Save Email Settings'}
+              {savingEmail ? 'Saving...' : 'Save Email Settings'}
             </Button>
           </div>
         </div>
@@ -366,7 +366,7 @@ export default function NotificationSettingsPage() {
               className="flex items-center gap-1.5"
             >
               <Save size={13} />
-              {savingNotif ? 'Savingâ€¦' : 'Save Preferences'}
+              {savingNotif ? 'Saving...' : 'Save Preferences'}
             </Button>
           </div>
         </div>

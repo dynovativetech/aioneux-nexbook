@@ -43,6 +43,10 @@ namespace BookingPlatform.Api.Services
             var bookings = await _context.Bookings
                 .Include(b => b.User)
                 .Include(b => b.Facility)
+                    .ThenInclude(f => f!.Venue)
+                        .ThenInclude(v => v!.Community)
+                            .ThenInclude(c => c.Area)
+                                .ThenInclude(a => a.City)
                 .Include(b => b.Activity)
                 .Include(b => b.Instructor)
                 .Include(b => b.Participants)
@@ -183,7 +187,7 @@ namespace BookingPlatform.Api.Services
         ///   caught and returned as a Conflict ApiResponse instead of a 500.
         /// </summary>
         private async Task<ApiResponse<BookingResponse>> CreateTransactionalAsync(
-            int userId, int facilityId, int activityId, int? instructorId,
+            int userId, int facilityId, int? activityId, int? instructorId,
             BookingType bookingType, List<TimeSlotRequest> slots,
             int participantCount, string? notes, List<BookingParticipantDto>? participants,
             string auditSuffix = "")
@@ -326,7 +330,7 @@ namespace BookingPlatform.Api.Services
                 if (req.InstructorId.HasValue)
                     existing.InstructorReservations.Add(
                         BuildInstructorReservation(
-                            req.InstructorId.Value, req.ActivityId, req.StartTime, req.EndTime));
+                            req.InstructorId.Value, req.ActivityId ?? 0, req.StartTime, req.EndTime));
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -527,7 +531,7 @@ namespace BookingPlatform.Api.Services
         /// so Task.WhenAll across the same context is not safe.
         /// </summary>
         private async Task<List<string>> ValidateCommonAsync(
-            int userId, int facilityId, int activityId, int? instructorId, int participantCount)
+            int userId, int facilityId, int? activityId, int? instructorId, int participantCount)
         {
             var errors = new List<string>();
 
@@ -544,7 +548,9 @@ namespace BookingPlatform.Api.Services
                 errors.Add(
                     $"ParticipantCount ({participantCount}) exceeds facility capacity ({facility.Capacity}).");
 
-            if (!await _context.Activities.AnyAsync(a => a.Id == activityId))
+            // Only validate the activity when one was explicitly supplied.
+            if (activityId.HasValue && activityId.Value > 0 &&
+                !await _context.Activities.AnyAsync(a => a.Id == activityId.Value))
                 errors.Add($"Activity #{activityId} does not exist.");
 
             if (instructorId.HasValue)
@@ -564,8 +570,9 @@ namespace BookingPlatform.Api.Services
                         .Select(s => s.ActivityId)
                         .ToListAsync();
 
-                    if (qualifiedActivityIds.Count > 0 &&
-                        !qualifiedActivityIds.Contains(activityId))
+                    if (activityId.HasValue && activityId.Value > 0 &&
+                        qualifiedActivityIds.Count > 0 &&
+                        !qualifiedActivityIds.Contains(activityId.Value))
                     {
                         errors.Add(
                             $"Instructor #{instructorId} is not qualified for Activity #{activityId}.");
@@ -717,7 +724,7 @@ namespace BookingPlatform.Api.Services
         /// </summary>
         private static Booking BuildBookingAggregate(
             int tenantId,
-            int userId, int facilityId, int activityId, int? instructorId,
+            int userId, int facilityId, int? activityId, int? instructorId,
             BookingType bookingType, List<TimeSlotRequest> slots,
             int participantCount, string? notes, List<BookingParticipantDto>? participants)
         {
@@ -760,7 +767,7 @@ namespace BookingPlatform.Api.Services
                 foreach (var slot in slots)
                     booking.InstructorReservations.Add(
                         BuildInstructorReservation(
-                            instructorId.Value, activityId, slot.StartTime, slot.EndTime));
+                            instructorId.Value, activityId ?? 0, slot.StartTime, slot.EndTime));
 
             return booking;
         }
@@ -826,6 +833,10 @@ namespace BookingPlatform.Api.Services
             await _context.Bookings
                 .Include(b => b.User)
                 .Include(b => b.Facility)
+                    .ThenInclude(f => f!.Venue)
+                        .ThenInclude(v => v!.Community)
+                            .ThenInclude(c => c.Area)
+                                .ThenInclude(a => a.City)
                 .Include(b => b.Activity)
                 .Include(b => b.Instructor)
                 .Include(b => b.Participants)
@@ -842,12 +853,18 @@ namespace BookingPlatform.Api.Services
             FacilityId     = b.FacilityId,
             FacilityName   = b.Facility?.Name       ?? string.Empty,
             ActivityId     = b.ActivityId,
-            ActivityName   = b.Activity?.Name       ?? string.Empty,
+            ActivityName   = b.Activity?.Name,
             InstructorId   = b.InstructorId,
             InstructorName = b.Instructor?.Name,
             StartTime      = b.StartTime,
             EndTime        = b.EndTime,
             Status         = b.Status,
+            TenantId         = b.TenantId,
+            VenueId          = b.Facility?.VenueId,
+            VenueName        = b.Facility?.Venue?.Name        ?? string.Empty,
+            CommunityName    = b.Facility?.Venue?.Community?.Name ?? string.Empty,
+            AreaName         = b.Facility?.Venue?.Community?.Area?.Name ?? string.Empty,
+            CityName         = b.Facility?.Venue?.Community?.Area?.City?.Name ?? string.Empty,
             BookingType      = b.BookingType,
             ParticipantCount = b.ParticipantCount,
             Notes            = b.Notes,

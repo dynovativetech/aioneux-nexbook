@@ -17,8 +17,8 @@ namespace BookingPlatform.Api.DTOs
         public int           FacilityId     { get; set; }
         public string        FacilityName   { get; set; } = string.Empty;
 
-        public int           ActivityId     { get; set; }
-        public string        ActivityName   { get; set; } = string.Empty;
+        public int?          ActivityId     { get; set; }
+        public string?       ActivityName   { get; set; }
 
         public int?          InstructorId   { get; set; }
         public string?       InstructorName { get; set; }
@@ -26,6 +26,14 @@ namespace BookingPlatform.Api.DTOs
         public DateTime      StartTime      { get; set; }
         public DateTime      EndTime        { get; set; }
         public BookingStatus Status         { get; set; }
+
+        // ── Venue / location ─────────────────────────────────────────────────
+        public int?   VenueId       { get; set; }
+        public string VenueName     { get; set; } = string.Empty;
+        public string CommunityName { get; set; } = string.Empty;
+        public string AreaName      { get; set; } = string.Empty;
+        public string CityName      { get; set; } = string.Empty;
+        public int    TenantId      { get; set; }
 
         // ── New fields ───────────────────────────────────────────────────────
         public BookingType   BookingType       { get; set; }

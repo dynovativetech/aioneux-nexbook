@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { ApiHealthProvider } from './context/ApiHealthContext';
+import OfflineOverlay from './components/ui/OfflineOverlay';
 
 import DashboardLayout      from './layouts/DashboardLayout';
 import LoginPage            from './pages/auth/LoginPage';
@@ -7,6 +9,7 @@ import RegisterPage         from './pages/auth/RegisterPage';
 
 // Customer pages
 import DashboardPage        from './pages/customer/DashboardPage';
+import ActivityFeedPage     from './pages/customer/ActivityFeedPage';
 import BookingPage          from './pages/customer/BookingPage';
 import MyBookingsPage       from './pages/customer/MyBookingsPage';
 import ComplaintPage        from './pages/customer/ComplaintPage';
@@ -17,12 +20,14 @@ import FacilityBookingPage  from './pages/customer/FacilityBookingPage';
 // TenantAdmin pages
 import AdminDashboardPage       from './pages/admin/AdminDashboardPage';
 import ManageBookingsPage       from './pages/admin/ManageBookingsPage';
-import ManageComplaintsPage     from './pages/admin/ManageComplaintsPage';
+import ManageComplaintsPage          from './pages/admin/ManageComplaintsPage';
+import ManageComplaintCategoriesPage from './pages/admin/ManageComplaintCategoriesPage';
 import ManageFacilitiesPage     from './pages/admin/ManageFacilitiesPage';
 import ManageInstructorsPage    from './pages/admin/ManageInstructorsPage';
 import ManageActivitiesPage     from './pages/admin/ManageActivitiesPage';
 import AuditLogPage             from './pages/admin/AuditLogPage';
 import ManageVenuesPage         from './pages/admin/ManageVenuesPage';
+import ManageMembersPage        from './pages/admin/ManageMembersPage';
 import ManageCommunitiesPage    from './pages/admin/ManageCommunitiesPage';
 import NotificationSettingsPage from './pages/admin/NotificationSettingsPage';
 
@@ -63,7 +68,7 @@ function RootRedirect() {
   return <Navigate to="/dashboard" replace />;
 }
 
-export default function App() {
+function App() {
   return (
     <Routes>
       {/* Public */}
@@ -89,8 +94,10 @@ export default function App() {
         </ProtectedRoute>
       }>
         <Route path="/admin"                       element={<AdminDashboardPage />} />
+        <Route path="/admin/members"               element={<ManageMembersPage />} />
         <Route path="/admin/bookings"              element={<ManageBookingsPage />} />
-        <Route path="/admin/complaints"            element={<ManageComplaintsPage />} />
+        <Route path="/admin/complaints"             element={<ManageComplaintsPage />} />
+        <Route path="/admin/complaint-categories"  element={<ManageComplaintCategoriesPage />} />
         <Route path="/admin/venues"                element={<ManageVenuesPage />} />
         <Route path="/admin/communities"           element={<ManageCommunitiesPage />} />
         <Route path="/admin/facilities"            element={<ManageFacilitiesPage />} />
@@ -124,6 +131,7 @@ export default function App() {
         <Route path="/book"              element={<FacilityBookingPage />} />
         <Route path="/booking"           element={<BookingPage />} />
         <Route path="/my-bookings"       element={<MyBookingsPage />} />
+        <Route path="/activity-feed"     element={<ActivityFeedPage />} />
         <Route path="/complaints"        element={<ComplaintPage />} />
       </Route>
 
@@ -131,5 +139,16 @@ export default function App() {
       <Route path="/"  element={<RootRedirect />} />
       <Route path="*"  element={<Navigate to="/" replace />} />
     </Routes>
+  );
+}
+
+// Wrap the entire app with API health monitoring
+const OriginalApp = App;
+export default function AppWithHealth() {
+  return (
+    <ApiHealthProvider>
+      <OriginalApp />
+      <OfflineOverlay />
+    </ApiHealthProvider>
   );
 }

@@ -1,4 +1,4 @@
-﻿export type BadgeColor =
+export type BadgeColor =
   | 'gray' | 'blue' | 'indigo' | 'violet' | 'cyan'
   | 'green' | 'yellow' | 'orange' | 'red' | 'pink';
 
@@ -62,11 +62,15 @@ export function bookingStatusColor(status: string): BadgeColor {
 
 export function complaintStatusColor(status: string): BadgeColor {
   switch (status) {
-    case 'Open':       return 'yellow';
-    case 'InProgress': return 'blue';
-    case 'Resolved':   return 'green';
-    case 'Rejected':   return 'red';
-    default:           return 'gray';
+    case 'Open':             return 'yellow';
+    case 'InProgress':       return 'blue';
+    case 'Resolved':         return 'green';
+    case 'Rejected':         return 'red';
+    case 'ActionRequired':   return 'red';
+    case 'MoreInfoRequired': return 'yellow';
+    case 'Closed':           return 'gray';
+    case 'Cancelled':        return 'gray';
+    default:                 return 'gray';
   }
 }
 

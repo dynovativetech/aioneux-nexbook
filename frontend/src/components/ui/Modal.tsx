@@ -180,7 +180,10 @@ export default function Modal({
 
         {/* Body */}
         {children && (
-          <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div
+            className="flex-1 overflow-y-scroll px-6 py-5"
+            style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+          >
             {children}
           </div>
         )}

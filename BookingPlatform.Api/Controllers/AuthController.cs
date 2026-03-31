@@ -1,5 +1,4 @@
 using BookingPlatform.Api.DTOs;
-using BookingPlatform.Api.Entities;
 using BookingPlatform.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -60,13 +59,44 @@ namespace BookingPlatform.Api.Controllers
                     await _audit.LogAsync("FailedLogin", "User", null,
                         request.Email, $"Failed login attempt for {request.Email}.");
                 }
-                // Use 400 (not 401) so the Axios 401-interceptor does not swallow the error message.
                 return result.Success ? Ok(result) : BadRequest(result);
             }
             catch (Exception ex)
             {
                 return StatusCode(500, AuthResponse.Fail($"Login failed: {ex.Message}"));
             }
+        }
+
+        /// <summary>Get current user's profile.</summary>
+        [HttpGet("profile/{userId:int}")]
+        public async Task<IActionResult> GetProfile(int userId)
+        {
+            var result = await _authService.GetProfileAsync(userId);
+            return result.Success ? Ok(result) : NotFound(result);
+        }
+
+        /// <summary>Update user profile (name, phone, address, etc.).</summary>
+        [HttpPut("profile")]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
+        {
+            var result = await _authService.UpdateProfileAsync(request.UserId, request);
+            return result.Success ? Ok(result) : result.ErrorKind switch
+            {
+                ApiErrorKind.NotFound => NotFound(result),
+                _                    => BadRequest(result),
+            };
+        }
+
+        /// <summary>Change the authenticated user's password.</summary>
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            var result = await _authService.ChangePasswordAsync(request);
+            return result.Success ? Ok(result) : result.ErrorKind switch
+            {
+                ApiErrorKind.NotFound => NotFound(result),
+                _                    => BadRequest(result),
+            };
         }
     }
 }

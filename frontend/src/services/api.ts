@@ -12,20 +12,49 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect to /login on 401 — but NOT for the auth endpoints themselves
+// Track whether we have signalled offline so we don't spam events
+let _isApiDown = false;
+
+function emitOnline() {
+  if (_isApiDown) {
+    _isApiDown = false;
+    window.dispatchEvent(new CustomEvent('api:online'));
+  }
+}
+function emitOffline() {
+  if (!_isApiDown) {
+    _isApiDown = true;
+    window.dispatchEvent(new CustomEvent('api:offline'));
+  }
+}
+
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // Any successful response means the server is reachable
+    emitOnline();
+    return res;
+  },
   (error) => {
     const url: string = error.config?.url ?? '';
     const isAuthEndpoint = url.includes('/auth/');
+    const status: number | undefined = error.response?.status;
 
-    if (error.response?.status === 401 && !isAuthEndpoint) {
+    // Network error (no response at all) or server-side 5xx = API is down
+    if (!error.response || (status !== undefined && status >= 500)) {
+      emitOffline();
+    } else {
+      // 4xx and other errors mean server is up, just a business error
+      emitOnline();
+    }
+
+    if (status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('bp_token');
       localStorage.removeItem('bp_user');
       window.location.href = '/login';
     }
+
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;

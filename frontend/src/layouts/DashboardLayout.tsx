@@ -13,6 +13,7 @@ const TITLES: Record<string, string> = {
   '/admin':               'Admin Dashboard',
   '/admin/bookings':      'Manage Bookings',
   '/admin/complaints':    'Manage Complaints',
+  '/admin/members':       'Member Management',
   '/admin/venues':        'Manage Venues',
   '/admin/communities':   'Communities',
   '/admin/facilities':    'Manage Facilities',

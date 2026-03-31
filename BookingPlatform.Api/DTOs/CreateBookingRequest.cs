@@ -14,8 +14,8 @@ namespace BookingPlatform.Api.DTOs
         [Required]
         public int FacilityId { get; set; }
 
-        [Required]
-        public int ActivityId { get; set; }
+        /// <summary>Optional. When null the booking is not tied to a specific activity (free-use).</summary>
+        public int? ActivityId { get; set; }
 
         /// <summary>Optional. When supplied the instructor will be validated and reserved.</summary>
         public int? InstructorId { get; set; }

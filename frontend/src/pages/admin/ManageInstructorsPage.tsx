@@ -77,7 +77,7 @@ export default function ManageInstructorsPage() {
   if (loading) return <Spinner fullPage />;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5">
+    <div className="w-[80%] mx-auto space-y-5">
       {toast && (
         <div className={`px-4 py-3 rounded-lg text-sm font-medium border
           ${toast.ok

@@ -80,7 +80,7 @@ export default function AuditLogPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="max-w-7xl mx-auto space-y-5">
+    <div className="w-[80%] mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -109,7 +109,7 @@ export default function AuditLogPage() {
             <input
               value={filters.actor ?? ''}
               onChange={e => applyFilter({ actor: e.target.value })}
-              placeholder="Search userâ€¦"
+              placeholder="Search user..."
               className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg
                 focus:outline-none focus:ring-2 focus:ring-[#0078D7]/30 focus:border-transparent" />
           </div>
@@ -205,10 +205,10 @@ export default function AuditLogPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs max-w-xs">
-                      <span className="line-clamp-2" title={log.details ?? ''}>{log.details ?? 'â€”'}</span>
+                      <span className="line-clamp-2" title={log.details ?? ''}>{log.details ?? '-'}</span>
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-xs font-mono">
-                      {log.ipAddress ?? 'â€”'}
+                      {log.ipAddress ?? '-'}
                     </td>
                   </tr>
                 ))}
@@ -248,7 +248,7 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#e6f3fc] text-[#025DB6]
       rounded-full text-xs font-medium">
       {label}
-      <button onClick={onRemove} className="hover:text-[#025DB6] leading-none">Ã—</button>
+      <button onClick={onRemove} className="hover:text-[#025DB6] leading-none">x</button>
     </span>
   );
 }

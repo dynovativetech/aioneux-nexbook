@@ -1,10 +1,11 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Building2, Plus, Pencil, Trash2, Image, Clock, Star,
-  Users, X,
+  Users, X, Search, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { venueService, type VenueListItem, type VenueDetail, type CreateVenuePayload } from '../../services/venueService';
-import { locationService } from '../../services/locationService';
+import { locationService, getCountries, getCities, getAreas, getCommunities } from '../../services/locationService';
+import type { Country, City, Area, Community } from '../../types';
 import Button   from '../../components/ui/Button';
 import Spinner  from '../../components/ui/Spinner';
 import { ConfirmModal } from '../../components/ui/Modal';
@@ -52,9 +53,24 @@ export default function ManageVenuesPage() {
   const [venues,    setVenues]    = useState<VenueListItem[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [toastMsg,  setToastMsg]  = useState<{ok:boolean;msg:string}|null>(null);
-  const [search,    setSearch]    = useState('');
+  const [search,        setSearch]        = useState('');
+  const [statusFilter,  setStatusFilter]  = useState<'All' | 'Active' | 'Inactive'>('All');
   const [deleteId,  setDeleteId]  = useState<number|null>(null);
   const [deleting,  setDeleting]  = useState(false);
+
+  // Location cascade filter
+  const [countries,          setCountries]          = useState<Country[]>([]);
+  const [cities,             setCities]             = useState<City[]>([]);
+  const [areas,              setAreas]              = useState<Area[]>([]);
+  const [locationCommunities, setLocationCommunities] = useState<Community[]>([]);
+  const [selCountry,  setSelCountry]  = useState<number | ''>('');
+  const [selCity,     setSelCity]     = useState<number | ''>('');
+  const [selArea,     setSelArea]     = useState<number | ''>('');
+  const [selCommunity, setSelCommunity] = useState<number | ''>('');
+
+  // Pagination
+  const [page,     setPage]     = useState(1);
+  const [pageSize, setPageSize] = useState(15);
 
   // Drawer state
   const [drawerOpen,   setDrawerOpen]   = useState(false);
@@ -63,11 +79,35 @@ export default function ManageVenuesPage() {
   const [venueDetail,  setVenueDetail]  = useState<VenueDetail|null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const loadVenues = async () => {
+  // Load countries on mount
+  useEffect(() => { getCountries().then(setCountries).catch(() => {}); }, []);
+  // Cascade: country -> cities
+  useEffect(() => {
+    setCities([]); setAreas([]); setLocationCommunities([]);
+    setSelCity(''); setSelArea(''); setSelCommunity('');
+    if (selCountry) getCities(Number(selCountry)).then(setCities).catch(() => {});
+  }, [selCountry]);
+  // Cascade: city -> areas
+  useEffect(() => {
+    setAreas([]); setLocationCommunities([]);
+    setSelArea(''); setSelCommunity('');
+    if (selCity) getAreas(Number(selCity)).then(setAreas).catch(() => {});
+  }, [selCity]);
+  // Cascade: area -> communities
+  useEffect(() => {
+    setLocationCommunities([]); setSelCommunity('');
+    if (selArea) getCommunities(Number(selArea)).then(setLocationCommunities).catch(() => {});
+  }, [selArea]);
+
+  const loadVenues = async (communityId?: number) => {
     setLoading(true);
     try {
-      const data = await venueService.list({ search: search || undefined });
+      const data = await venueService.list({
+        communityId: communityId || undefined,
+        search: search || undefined,
+      });
       setVenues(data);
+      setPage(1);
     } catch {
       toast(false, 'Failed to load venues.', setToastMsg);
     } finally {
@@ -77,10 +117,23 @@ export default function ManageVenuesPage() {
 
   useEffect(() => { loadVenues(); }, []); // eslint-disable-line
 
-  const filtered = venues.filter(v =>
-    !search || v.name.toLowerCase().includes(search.toLowerCase()) ||
-    v.address.toLowerCase().includes(search.toLowerCase())
-  );
+  // Re-fetch when community selection changes
+  useEffect(() => {
+    loadVenues(selCommunity ? Number(selCommunity) : undefined);
+  }, [selCommunity]); // eslint-disable-line
+
+  const filtered = venues.filter(v => {
+    const q = search.toLowerCase();
+    const matchesSearch = !q || v.name.toLowerCase().includes(q) || v.address.toLowerCase().includes(q);
+    const matchesStatus = statusFilter === 'All'
+      || (statusFilter === 'Active' && v.isActive)
+      || (statusFilter === 'Inactive' && !v.isActive);
+    return matchesSearch && matchesStatus;
+  });
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const activeLocFilter = !!(selCountry || selCity || selArea || selCommunity);
 
   async function openNew() {
     setEditingId(null);
@@ -122,7 +175,7 @@ export default function ManageVenuesPage() {
   if (loading) return <Spinner fullPage />;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
+    <div className="w-[80%] mx-auto space-y-5">
       {toastMsg && (
         <div className={`px-4 py-3 rounded-lg text-sm font-medium border ${
           toastMsg.ok ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -132,32 +185,98 @@ export default function ManageVenuesPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-[#cce7f9] rounded-lg">
             <Building2 size={20} className="text-[#0078D7]" />
           </div>
           <div>
             <h1 className="text-lg font-semibold text-gray-800">Venues</h1>
-            <p className="text-sm text-gray-500">{filtered.length} total</p>
+            <p className="text-sm text-gray-500">{filtered.length} of {venues.length} shown</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search venuesâ€¦"
-            className="text-sm px-3 py-2 border border-gray-200 rounded-lg w-56
-              focus:outline-none focus:ring-2 focus:ring-[#0078D7]/30 focus:border-transparent"
-          />
-          <Button variant="primary" size="sm" icon={<Plus size={15} />} onClick={openNew}>
-            Add Venue
-          </Button>
+        <Button variant="primary" size="sm" icon={<Plus size={15} />} onClick={openNew}>
+          Add Venue
+        </Button>
+      </div>
+
+      {/* Filter bar */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_4px_0_rgb(0_0_0_/_0.06)] px-4 py-3 space-y-3">
+        {/* Row 1: Search + status */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search by name or address..."
+              className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-gray-200
+                focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20 focus:border-[#0078D7] placeholder:text-gray-400" />
+          </div>
+          <div className="flex gap-1.5 flex-shrink-0">
+            {(['All', 'Active', 'Inactive'] as const).map(opt => (
+              <button key={opt} onClick={() => { setStatusFilter(opt); setPage(1); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  statusFilter === opt ? 'bg-[#0078D7] text-white border-[#0078D7]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}>{opt}</button>
+            ))}
+          </div>
+        </div>
+        {/* Row 2: Location cascade */}
+        <div className="flex items-center gap-2 flex-wrap text-sm">
+          <span className="text-xs text-gray-400 font-medium whitespace-nowrap">Filter by location:</span>
+          <select value={selCountry} onChange={e => setSelCountry(e.target.value ? Number(e.target.value) : '')}
+            className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20">
+            <option value="">All Countries</option>
+            {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          {selCountry && (
+            <select value={selCity} onChange={e => setSelCity(e.target.value ? Number(e.target.value) : '')}
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20">
+              <option value="">All Cities</option>
+              {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
+          {selCity && (
+            <select value={selArea} onChange={e => setSelArea(e.target.value ? Number(e.target.value) : '')}
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20">
+              <option value="">All Areas</option>
+              {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          )}
+          {selArea && (
+            <select value={selCommunity} onChange={e => setSelCommunity(e.target.value ? Number(e.target.value) : '')}
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20">
+              <option value="">All Communities</option>
+              {locationCommunities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
+          {(search || statusFilter !== 'All' || activeLocFilter) && (
+            <button onClick={() => {
+              setSearch(''); setStatusFilter('All');
+              setSelCountry(''); setSelCity(''); setSelArea(''); setSelCommunity('');
+              setPage(1);
+            }} className="text-xs text-gray-400 hover:text-red-500 transition-colors">
+              Clear all
+            </button>
+          )}
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_4px_0_rgb(0_0_0_/_0.06)] overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <p className="text-sm font-medium text-gray-700">
+            {filtered.length} venue{filtered.length !== 1 ? 's' : ''}
+            {filtered.length < venues.length && <span className="text-gray-400 font-normal"> of {venues.length}</span>}
+          </p>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>Show</span>
+            <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none">
+              {[10, 15, 20, 25, 30, 50].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <span>per page</span>
+          </div>
+        </div>
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
@@ -167,11 +286,11 @@ export default function ManageVenuesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filtered.length === 0 ? (
+            {paged.length === 0 ? (
               <tr><td colSpan={6} className="py-10 text-center text-gray-400 text-sm">
                 No venues found. Click "Add Venue" to create one.
               </td></tr>
-            ) : filtered.map(v => (
+            ) : paged.map(v => (
               <tr key={v.id} className="hover:bg-gray-50 transition-colors">
                 <td className="pl-4 py-3 w-12">
                   {v.coverImageUrl
@@ -210,6 +329,32 @@ export default function ManageVenuesPage() {
             ))}
           </tbody>
         </table>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/40">
+            <span className="text-xs text-gray-400">Page {page} of {totalPages}</span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-40">
+                <ChevronLeft size={13} />
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+                const pg = start + i;
+                return (
+                  <button key={pg} onClick={() => setPage(pg)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                      pg === page ? 'bg-[#0078D7] text-white border-[#0078D7]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}>{pg}</button>
+                );
+              })}
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-40">
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Drawer / Sheet */}
@@ -608,7 +753,7 @@ function ImagesTab({ venueId, images, logoUrl, showToast, onRefresh, onNext }: {
             <Button variant="secondary" size="sm" onClick={() => logoRef.current?.click()} loading={uploading}>
               {logoUrl ? 'Replace Logo' : 'Upload Logo'}
             </Button>
-            <p className="text-xs text-gray-400 mt-1">Square image recommended Â· PNG or JPG</p>
+            <p className="text-xs text-gray-400 mt-1">Square image recommended  -  PNG or JPG</p>
           </div>
         </div>
       </div>
@@ -665,7 +810,7 @@ function ImagesTab({ venueId, images, logoUrl, showToast, onRefresh, onNext }: {
 
       {onNext && (
         <div className="flex justify-end pt-2">
-          <Button variant="primary" onClick={onNext}>Next: Set Hours â†’</Button>
+          <Button variant="primary" onClick={onNext}>Next: Set Hours â†'</Button>
         </div>
       )}
     </div>
@@ -744,7 +889,7 @@ function HoursTab({ venueId, hours, showToast, onSaved, onNext }: {
       <div className="flex justify-between items-center">
         <Button variant="primary" loading={saving} onClick={save}>Save Hours</Button>
         {onNext && (
-          <Button variant="secondary" onClick={onNext}>Next: Amenities â†’</Button>
+          <Button variant="secondary" onClick={onNext}>Next: Amenities â†'</Button>
         )}
       </div>
     </div>
@@ -802,7 +947,7 @@ function AmenitiesTab({ venueId, amenities, showToast, onSaved, onNext }: {
       <div className="flex justify-between items-center">
         <Button variant="primary" loading={saving} onClick={save}>Save Amenities</Button>
         {onNext && (
-          <Button variant="secondary" onClick={onNext}>Next: Organizers â†’</Button>
+          <Button variant="secondary" onClick={onNext}>Next: Organizers â†'</Button>
         )}
       </div>
     </div>

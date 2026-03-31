@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, MapPin, Building2, ChevronRight, Clock,
@@ -139,7 +139,7 @@ export default function VenueListingPage() {
   const sel = (key: keyof FilterState, val: unknown) => setFilter(f => ({ ...f, [key]: val }));
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-[80%] mx-auto space-y-6">
 
       {/* Hero header */}
       <div className="relative overflow-hidden bg-gradient-to-r from-[#0078D7] to-[#025DB6] rounded-2xl p-6 text-white shadow-[0_4px_20px_-4px_rgb(0_120_215_/_0.45)]">

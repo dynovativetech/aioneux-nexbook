@@ -1,0 +1,19 @@
+# Build
+**/bin/
+**/obj/
+*.user
+*.suo
+*.userosscache
+.vs/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Runtime uploads
+BookingPlatform.Api/wwwroot/uploads/
+
+# OS / IDE
+Thumbs.db
+*.swp
+.idea/

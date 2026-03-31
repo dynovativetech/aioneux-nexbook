@@ -1,3 +1,13 @@
 <Solution>
+  <Folder Name="/frontend/">
+    <File Path="frontend/index.html" />
+    <File Path="frontend/package-lock.json" />
+    <File Path="frontend/package.json" />
+    <File Path="frontend/postcss.config.js" />
+    <File Path="frontend/tailwind.config.js" />
+    <File Path="frontend/tsconfig.json" />
+    <File Path="frontend/tsconfig.node.json" />
+    <File Path="frontend/vite.config.ts" />
+  </Folder>
   <Project Path="BookingPlatform.Api/BookingPlatform.Api.csproj" />
 </Solution>

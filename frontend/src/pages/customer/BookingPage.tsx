@@ -270,7 +270,7 @@ export default function BookingPage() {
   // â”€â”€ Success screen â”€â”€
   if (confirmed && facility && activity && slot && date) {
     return (
-      <div className="max-w-5xl mx-auto">
+      <div className="w-[80%] mx-auto">
         <BookingSuccess
           booking={confirmed} facility={facility} activity={activity}
           instructor={instructor} slot={slot} date={date}
@@ -280,7 +280,7 @@ export default function BookingPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="w-[80%] mx-auto">
       <StepIndicator current={step} facility={facility} activity={activity} slot={slot} />
 
       {/* Error banner */}

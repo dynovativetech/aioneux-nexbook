@@ -2,18 +2,19 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, CalendarPlus, CalendarDays, MessageSquareWarning,
   Building2, UserCheck, Dumbbell, ShieldCheck, X, CalendarCheck, Shield,
-  MapPin, Bell, Search, LogOut,
+  MapPin, Bell, Search, Tag, Activity, Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface Props { open: boolean; onClose: () => void; }
 
 const customerLinks = [
-  { to: '/dashboard',   icon: LayoutDashboard,        label: 'Dashboard' },
-  { to: '/venues',      icon: Search,                 label: 'Find a Venue' },
-  { to: '/book',        icon: CalendarPlus,           label: 'Book a Facility' },
-  { to: '/my-bookings', icon: CalendarDays,           label: 'My Bookings' },
-  { to: '/complaints',  icon: MessageSquareWarning,   label: 'Complaints' },
+  { to: '/dashboard',      icon: LayoutDashboard,      label: 'Dashboard' },
+  { to: '/venues',         icon: Search,               label: 'Find a Venue' },
+  { to: '/book',           icon: CalendarPlus,         label: 'Book a Facility' },
+  { to: '/my-bookings',    icon: CalendarDays,         label: 'My Bookings' },
+  { to: '/activity-feed',  icon: Activity,             label: 'Activity Feed' },
+  { to: '/complaints',     icon: MessageSquareWarning, label: 'My Complaints' },
 ];
 
 type NavGroup = { group: string; items: { to: string; icon: React.ElementType; label: string }[] };
@@ -35,11 +36,13 @@ const adminNavGroups: NavGroup[] = [
   {
     group: 'Manage',
     items: [
-      { to: '/admin/bookings',    icon: CalendarDays,         label: 'Bookings' },
-      { to: '/admin/complaints',  icon: MessageSquareWarning, label: 'Complaints' },
-      { to: '/admin/facilities',  icon: Building2,            label: 'Facilities' },
-      { to: '/admin/instructors', icon: UserCheck,            label: 'Instructors' },
-      { to: '/admin/activities',  icon: Dumbbell,             label: 'Activities' },
+      { to: '/admin/members', icon: Users, label: 'Members' },
+      { to: '/admin/bookings',              icon: CalendarDays,         label: 'Bookings' },
+      { to: '/admin/complaints',            icon: MessageSquareWarning, label: 'Complaints' },
+      { to: '/admin/complaint-categories',  icon: Tag,                  label: 'Complaint Categories' },
+      { to: '/admin/facilities',            icon: Building2,            label: 'Facilities' },
+      { to: '/admin/instructors',           icon: UserCheck,            label: 'Instructors' },
+      { to: '/admin/activities',            icon: Dumbbell,             label: 'Activities' },
     ],
   },
   {
@@ -51,12 +54,8 @@ const adminNavGroups: NavGroup[] = [
   },
 ];
 
-function initials(name: string) {
-  return name.split(' ').map((n) => n[0]?.toUpperCase() ?? '').join('').slice(0, 2);
-}
-
 export default function Sidebar({ open, onClose }: Props) {
-  const { user, signOut, isTenantAdmin } = useAuth();
+  const { isTenantAdmin } = useAuth();
   const isAdmin = isTenantAdmin;
 
   return (
@@ -81,7 +80,7 @@ export default function Sidebar({ open, onClose }: Props) {
               <CalendarCheck size={18} className="text-white" />
             </div>
             <div>
-              <span className="font-bold text-gray-900 text-sm leading-none">BookingPlatform</span>
+              <span className="font-bold text-gray-900 text-sm leading-none">NexBook</span>
               <p className="text-[10px] text-gray-400 mt-0.5">
                 {isAdmin ? 'Admin Portal' : 'Member Portal'}
               </p>
@@ -137,28 +136,19 @@ export default function Sidebar({ open, onClose }: Props) {
           )}
         </nav>
 
-        {/* ── User footer ──────────────────────────── */}
-        <div className="p-3 border-t border-gray-100">
-          <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors group">
-            {/* Avatar */}
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#0078D7] to-[#025DB6] flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-sm">
-              {user ? initials(user.fullName) : '?'}
+        {/* ── Company branding footer ──────────────── */}
+        <div className="p-4 border-t border-gray-100">
+          <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl bg-gradient-to-r from-[#e6f3fc] to-[#cce7f9]/50">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#0078D7] to-[#025DB6] flex items-center justify-center flex-shrink-0 shadow-[0_2px_8px_-1px_rgb(0_120_215_/_0.40)]">
+              <CalendarCheck size={16} className="text-white" />
             </div>
-
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-gray-800 truncate leading-none">{user?.fullName}</p>
-              <p className="text-[10px] text-gray-400 truncate mt-0.5">{user?.email}</p>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-[#025DB6] leading-none">NexBook</p>
+              <p className="text-[10px] text-[#0078D7]/70 mt-0.5 truncate">Powered by Dynovative</p>
             </div>
-
-            <button
-              onClick={signOut}
-              title="Sign out"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-            >
-              <LogOut size={14} />
-            </button>
           </div>
         </div>
+
       </aside>
     </>
   );

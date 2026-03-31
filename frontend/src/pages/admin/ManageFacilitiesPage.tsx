@@ -1,15 +1,17 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Plus, Pencil, Trash2, Clock, Layers,
-  CheckCircle2, XCircle, ChevronDown, X, Link, Unlink,
+  CheckCircle2, XCircle, ChevronDown, X, Link, Unlink, Search,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { facilityService, type FacilityOperatingHours } from '../../services/facilityService';
 import { venueService, type VenueListItem } from '../../services/venueService';
 import { activityService } from '../../services/activityService';
+import { getCountries, getCities, getAreas, getCommunities } from '../../services/locationService';
+import type { Country, City, Area, Community, Facility, Activity } from '../../types';
 import Button   from '../../components/ui/Button';
 import Spinner  from '../../components/ui/Spinner';
 import { ConfirmModal } from '../../components/ui/Modal';
-import type { Facility, Activity } from '../../types';
 
 // â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -290,7 +292,7 @@ function FacilityDrawer({ facility, venues, onClose, onSaved, showToast }: Drawe
                   value={form.venueId ?? ''}
                   onChange={e => set('venueId', e.target.value ? Number(e.target.value) : null)}
                 >
-                  <option value="">â€” none â€”</option>
+                  <option value="">- none -</option>
                   {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
               </div>
@@ -319,7 +321,7 @@ function FacilityDrawer({ facility, venues, onClose, onSaved, showToast }: Drawe
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0078D7]/30 resize-none"
                   value={form.description}
                   onChange={e => set('description', e.target.value)}
-                  placeholder="Full details about this facilityâ€¦"
+                  placeholder="Full details about this facility..."
                 />
               </div>
             </div>
@@ -349,7 +351,7 @@ function FacilityDrawer({ facility, venues, onClose, onSaved, showToast }: Drawe
                 onClick={saveDetails}
                 disabled={!form.name.trim() || !form.location.trim() || saving}
               >
-                {saving ? 'Savingâ€¦' : isEdit ? 'Save Changes' : 'Create Facility'}
+                {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Facility'}
               </Button>
             </div>
           </div>
@@ -397,12 +399,12 @@ function FacilityDrawer({ facility, venues, onClose, onSaved, showToast }: Drawe
                 ))}
               </div>
               <p className="mt-2 text-xs text-gray-400">
-                Max booking = {maxSlots} Ã— {slotDuration < 60 ? `${slotDuration} min` : `${slotDuration / 60} hr`} = {maxSlots * slotDuration} min
+                Max booking = {maxSlots} x {slotDuration < 60 ? `${slotDuration} min` : `${slotDuration / 60} hr`} = {maxSlots * slotDuration} min
               </p>
             </div>
             <div className="flex justify-end">
               <Button variant="primary" size="sm" onClick={saveSlotConfig} disabled={savingSlot}>
-                {savingSlot ? 'Savingâ€¦' : 'Save Slot Config'}
+                {savingSlot ? 'Saving...' : 'Save Slot Config'}
               </Button>
             </div>
           </div>
@@ -457,7 +459,7 @@ function FacilityDrawer({ facility, venues, onClose, onSaved, showToast }: Drawe
                     value={selectedActivity}
                     onChange={e => setSelectedActivity(e.target.value ? Number(e.target.value) : '')}
                   >
-                    <option value="">â€” choose activity â€”</option>
+                    <option value="">- choose activity -</option>
                     {unlinkableActivities.map(a => (
                       <option key={a.id} value={a.id}>{a.name}</option>
                     ))}
@@ -535,7 +537,7 @@ function FacilityDrawer({ facility, venues, onClose, onSaved, showToast }: Drawe
                 </div>
                 <div className="flex justify-end pt-1">
                   <Button variant="primary" size="sm" onClick={saveHours} disabled={savingHours}>
-                    {savingHours ? 'Savingâ€¦' : 'Save Hours'}
+                    {savingHours ? 'Saving...' : 'Save Hours'}
                   </Button>
                 </div>
               </>
@@ -553,8 +555,21 @@ export default function ManageFacilitiesPage() {
   const [venues,      setVenues]      = useState<VenueListItem[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState<number | null>(null);
   const [facilities,  setFacilities]  = useState<Facility[]>([]);
+  const [search,      setSearch]      = useState('');
   const [loading,     setLoading]     = useState(false);
   const [loadingVenues, setLoadingVenues] = useState(true);
+  const [page,     setPage]     = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
+  // Location cascade
+  const [countries,          setCountries]          = useState<Country[]>([]);
+  const [cities,             setCities]             = useState<City[]>([]);
+  const [areas,              setAreas]              = useState<Area[]>([]);
+  const [locationCommunities, setLocationCommunities] = useState<Community[]>([]);
+  const [selCountry,  setSelCountry]  = useState<number | ''>('');
+  const [selCity,     setSelCity]     = useState<number | ''>('');
+  const [selArea,     setSelArea]     = useState<number | ''>('');
+  const [selCommunity, setSelCommunity] = useState<number | ''>('');
 
   const [drawerFacility, setDrawerFacility] = useState<Facility | null | 'new'>('new' as unknown as null);
   const [drawerOpen,     setDrawerOpen]     = useState(false);
@@ -567,18 +582,50 @@ export default function ManageFacilitiesPage() {
     setTimeout(() => setToast(null), 3500);
   }
 
-  // Load venues
+  // Location cascade effects
+  useEffect(() => { getCountries().then(setCountries).catch(() => {}); }, []);
   useEffect(() => {
+    setCities([]); setAreas([]); setLocationCommunities([]);
+    setSelCity(''); setSelArea(''); setSelCommunity('');
+    if (selCountry) getCities(Number(selCountry)).then(setCities).catch(() => {});
+  }, [selCountry]);
+  useEffect(() => {
+    setAreas([]); setLocationCommunities([]);
+    setSelArea(''); setSelCommunity('');
+    if (selCity) getAreas(Number(selCity)).then(setAreas).catch(() => {});
+  }, [selCity]);
+  useEffect(() => {
+    setLocationCommunities([]); setSelCommunity('');
+    if (selArea) getCommunities(Number(selArea)).then(setLocationCommunities).catch(() => {});
+  }, [selArea]);
+
+  // Load venues - re-fetch when community changes
+  const loadVenuesList = useCallback(async (communityId?: number) => {
     setLoadingVenues(true);
-    venueService.list({ activeOnly: false })
-      .then(data => {
-        const list = Array.isArray(data) ? data : (data as { data?: VenueListItem[] })?.data ?? [];
-        setVenues(list);
-        if (list.length > 0) setSelectedVenueId(list[0].id);
-      })
-      .catch(() => showToast(false, 'Failed to load venues.'))
-      .finally(() => setLoadingVenues(false));
-  }, []);
+    try {
+      const data = await venueService.list({ activeOnly: false, communityId });
+      const list = Array.isArray(data) ? data : (data as { data?: VenueListItem[] })?.data ?? [];
+      setVenues(list);
+      if (list.length > 0) setSelectedVenueId(list[0].id);
+      else setSelectedVenueId(null);
+    } catch {
+      showToast(false, 'Failed to load venues.');
+    } finally {
+      setLoadingVenues(false);
+    }
+  }, []); // eslint-disable-line
+
+  useEffect(() => { loadVenuesList(); }, []); // eslint-disable-line
+
+  // Re-fetch venues when community changes
+  useEffect(() => {
+    if (selCommunity !== '') {
+      loadVenuesList(Number(selCommunity));
+    } else {
+      loadVenuesList();
+    }
+    setPage(1);
+  }, [selCommunity]); // eslint-disable-line
 
   // Load facilities when venue changes
   const loadFacilities = useCallback(async (venueId: number | null) => {
@@ -628,7 +675,7 @@ export default function ManageFacilitiesPage() {
   if (loadingVenues) return <Spinner fullPage />;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
+    <div className="w-[80%] mx-auto space-y-5">
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -641,109 +688,187 @@ export default function ManageFacilitiesPage() {
         </Button>
       </div>
 
-      {/* Venue filter */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3">
-        <label className="text-sm text-gray-500 whitespace-nowrap">Filter by Venue</label>
-        <div className="relative">
-          <select
-            className="appearance-none border border-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/30"
-            value={selectedVenueId ?? ''}
-            onChange={e => setSelectedVenueId(e.target.value ? Number(e.target.value) : null)}
-          >
-            <option value="">â€” all / no venue â€”</option>
-            {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-          </select>
-          <ChevronDown size={13} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
+      {/* Filter bar */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_4px_0_rgb(0_0_0_/_0.06)] px-4 py-3 space-y-3">
+        {/* Row 1: venue selector + name search */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <label className="text-sm text-gray-500 whitespace-nowrap">Venue</label>
+            <div className="relative">
+              <select className="appearance-none border border-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/30"
+                value={selectedVenueId ?? ''}
+                onChange={e => { setSelectedVenueId(e.target.value ? Number(e.target.value) : null); setSearch(''); setPage(1); }}>
+                <option value="">All venues</option>
+                {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+              <ChevronDown size={13} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
+            </div>
+          </div>
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search facility name..."
+              className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-gray-200
+                focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20 focus:border-[#0078D7]" />
+          </div>
         </div>
-        {selectedVenue && (
-          <span className="text-xs text-gray-400">
-            {selectedVenue.facilityCount} facilit{selectedVenue.facilityCount === 1 ? 'y' : 'ies'} in this venue
-          </span>
-        )}
+        {/* Row 2: location cascade */}
+        <div className="flex items-center gap-2 flex-wrap text-sm">
+          <span className="text-xs text-gray-400 font-medium whitespace-nowrap">Filter by location:</span>
+          <select value={selCountry} onChange={e => setSelCountry(e.target.value ? Number(e.target.value) : '')}
+            className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20">
+            <option value="">All Countries</option>
+            {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          {selCountry && (
+            <select value={selCity} onChange={e => setSelCity(e.target.value ? Number(e.target.value) : '')}
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20">
+              <option value="">All Cities</option>
+              {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
+          {selCity && (
+            <select value={selArea} onChange={e => setSelArea(e.target.value ? Number(e.target.value) : '')}
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20">
+              <option value="">All Areas</option>
+              {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          )}
+          {selArea && (
+            <select value={selCommunity} onChange={e => setSelCommunity(e.target.value ? Number(e.target.value) : '')}
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20">
+              <option value="">All Communities</option>
+              {locationCommunities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
+          {(selCountry || selCity || selArea || selCommunity || search) && (
+            <button onClick={() => {
+              setSelCountry(''); setSelCity(''); setSelArea(''); setSelCommunity('');
+              setSearch(''); setPage(1);
+            }} className="text-xs text-gray-400 hover:text-red-500 transition-colors">Clear all</button>
+          )}
+        </div>
       </div>
 
       {/* Facilities table */}
       {loading ? (
         <Spinner fullPage />
-      ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100">
-            <p className="text-sm font-medium text-gray-600">
-              {facilities.length} facilit{facilities.length !== 1 ? 'ies' : 'y'}
-              {selectedVenue ? ` in ${selectedVenue.name}` : ''}
-            </p>
-          </div>
-
-          {facilities.length === 0 ? (
-            <div className="py-16 text-center">
-              <Building2 size={28} className="mx-auto mb-2 text-gray-300" />
-              <p className="text-gray-400 text-sm">No facilities found.</p>
-              <button onClick={openNew} className="mt-3 text-sm text-[#0078D7] hover:underline">
-                Add the first facility
-              </button>
+      ) : (() => {
+        const filteredF = facilities.filter(f =>
+          !search || f.name.toLowerCase().includes(search.toLowerCase())
+        );
+        const totalPagesF = Math.ceil(filteredF.length / pageSize);
+        const pagedF = filteredF.slice((page - 1) * pageSize, page * pageSize);
+        return (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_4px_0_rgb(0_0_0_/_0.06)] overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm font-medium text-gray-700">
+                {filteredF.length} facilit{filteredF.length !== 1 ? 'ies' : 'y'}
+                {selectedVenue ? <span className="text-gray-400"> in {selectedVenue.name}</span> : ''}
+                {search ? <span className="text-gray-400"> matching "{search}"</span> : ''}
+              </p>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span>Show</span>
+                <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                  className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none">
+                  {[10, 15, 20, 25, 30, 50].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <span>per page</span>
+              </div>
             </div>
-          ) : (
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                  <th className="px-5 py-3 text-left font-medium">Name</th>
-                  <th className="px-5 py-3 text-left font-medium">Location</th>
-                  <th className="px-5 py-3 text-center font-medium">Capacity</th>
-                  <th className="px-5 py-3 text-center font-medium">Slot</th>
-                  <th className="px-5 py-3 text-center font-medium">Max Slots</th>
-                  <th className="px-5 py-3 text-center font-medium">Approval</th>
-                  <th className="px-5 py-3 text-center font-medium">Active</th>
-                  <th className="px-5 py-3 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {facilities.map(f => (
-                  <tr key={f.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3 font-medium text-gray-800">{f.name}</td>
-                    <td className="px-5 py-3 text-gray-500 max-w-xs truncate">{f.location}</td>
-                    <td className="px-5 py-3 text-center text-gray-600">{f.capacity}</td>
-                    <td className="px-5 py-3 text-center">
-                      <span className="inline-flex items-center gap-1 text-gray-600">
-                        <Clock size={12} className="text-gray-400" />
-                        {f.slotDurationMinutes ?? 60}m
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-center text-gray-600">{f.maxConsecutiveSlots ?? 3}</td>
-                    <td className="px-5 py-3 text-center">
-                      {f.requiresApproval
-                        ? <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Required</span>
-                        : <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Auto</span>}
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      {f.isActive
-                        ? <CheckCircle2 size={16} className="text-emerald-500 mx-auto" />
-                        : <XCircle size={16} className="text-gray-300 mx-auto" />}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          onClick={() => openEdit(f)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-[#0078D7] hover:bg-[#e6f3fc] transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(f.id)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+
+            {filteredF.length === 0 ? (
+              <div className="py-16 text-center">
+                <Building2 size={28} className="mx-auto mb-2 text-gray-300" />
+                <p className="text-gray-400 text-sm">No facilities found.</p>
+                <button onClick={openNew} className="mt-3 text-sm text-[#0078D7] hover:underline">
+                  Add the first facility
+                </button>
+              </div>
+            ) : (
+              <>
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                      <th className="px-5 py-3 text-left font-medium">Name</th>
+                      <th className="px-5 py-3 text-left font-medium">Location</th>
+                      <th className="px-5 py-3 text-center font-medium">Capacity</th>
+                      <th className="px-5 py-3 text-center font-medium">Slot</th>
+                      <th className="px-5 py-3 text-center font-medium">Max Slots</th>
+                      <th className="px-5 py-3 text-center font-medium">Approval</th>
+                      <th className="px-5 py-3 text-center font-medium">Active</th>
+                      <th className="px-5 py-3 text-right font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pagedF.map(f => (
+                      <tr key={f.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-5 py-3 font-medium text-gray-800">{f.name}</td>
+                        <td className="px-5 py-3 text-gray-500 max-w-xs truncate">{f.location}</td>
+                        <td className="px-5 py-3 text-center text-gray-600">{f.capacity}</td>
+                        <td className="px-5 py-3 text-center">
+                          <span className="inline-flex items-center gap-1 text-gray-600">
+                            <Clock size={12} className="text-gray-400" />
+                            {f.slotDurationMinutes ?? 60}m
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-center text-gray-600">{f.maxConsecutiveSlots ?? 3}</td>
+                        <td className="px-5 py-3 text-center">
+                          {f.requiresApproval
+                            ? <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Required</span>
+                            : <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Auto</span>}
+                        </td>
+                        <td className="px-5 py-3 text-center">
+                          {f.isActive
+                            ? <CheckCircle2 size={16} className="text-emerald-500 mx-auto" />
+                            : <XCircle size={16} className="text-gray-300 mx-auto" />}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <button onClick={() => openEdit(f)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-[#0078D7] hover:bg-[#e6f3fc] transition-colors" title="Edit">
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => setDeleteId(f.id)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {totalPagesF > 1 && (
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/40">
+                    <span className="text-xs text-gray-400">Page {page} of {totalPagesF}</span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                        className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-40">
+                        <ChevronLeft size={13} />
+                      </button>
+                      {Array.from({ length: Math.min(5, totalPagesF) }, (_, i) => {
+                        const start = Math.max(1, Math.min(page - 2, totalPagesF - 4));
+                        const pg = start + i;
+                        return (
+                          <button key={pg} onClick={() => setPage(pg)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                              pg === page ? 'bg-[#0078D7] text-white border-[#0078D7]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                            }`}>{pg}</button>
+                        );
+                      })}
+                      <button onClick={() => setPage(p => Math.min(totalPagesF, p + 1))} disabled={page === totalPagesF}
+                        className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-40">
+                        <ChevronRight size={13} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Drawer */}
       {drawerOpen && (

@@ -29,12 +29,20 @@ namespace BookingPlatform.Api.Services
 
             var role = email.StartsWith("admin") ? Roles.TenantAdmin : Roles.Customer;
 
+            int? tenantIdForNewUser = null;
+            if (role == Roles.Customer)
+            {
+                var defaultTenant = await _context.Tenants.OrderBy(t => t.Id).FirstOrDefaultAsync();
+                tenantIdForNewUser = defaultTenant?.Id;
+            }
+
             var user = new User
             {
                 FullName     = request.FullName.Trim(),
                 Email        = email,
                 PasswordHash = PasswordHelper.Hash(request.Password),
-                Role         = role
+                Role         = role,
+                TenantId     = tenantIdForNewUser,
             };
 
             _context.Users.Add(user);
@@ -55,10 +63,81 @@ namespace BookingPlatform.Api.Services
             if (!PasswordHelper.Verify(request.Password, user.PasswordHash))
                 return AuthResponse.Fail("Invalid email or password.");
 
+            if (!user.IsActive)
+                return AuthResponse.Fail("This account has been deactivated. Contact your administrator.");
+
             return IssueToken(user);
         }
 
+        public async Task<ApiResponse<UserProfileDto>> GetProfileAsync(int userId)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user is null)
+                return ApiResponse<UserProfileDto>.NotFound($"User #{userId} not found.");
+
+            return ApiResponse<UserProfileDto>.Ok(MapToProfile(user));
+        }
+
+        public async Task<ApiResponse<UserProfileDto>> UpdateProfileAsync(int userId, UpdateProfileRequest req)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user is null)
+                return ApiResponse<UserProfileDto>.NotFound($"User #{userId} not found.");
+
+            if (!string.IsNullOrWhiteSpace(req.FirstName))
+                user.FirstName = req.FirstName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.LastName))
+                user.LastName = req.LastName.Trim();
+
+            // Derive FullName from FirstName + LastName for backward compatibility
+            var parts    = new[] { user.FirstName, user.LastName }.Where(s => !string.IsNullOrWhiteSpace(s));
+            var fullName = string.Join(" ", parts);
+            if (!string.IsNullOrWhiteSpace(fullName))
+                user.FullName = fullName;
+
+            user.PhoneNumber = req.PhoneNumber?.Trim();
+            user.Address     = req.Address?.Trim();
+            user.City        = req.City?.Trim();
+            user.State       = req.State?.Trim();
+            user.CountryName = req.CountryName?.Trim();
+            user.PostalCode  = req.PostalCode?.Trim();
+
+            await _context.SaveChangesAsync();
+
+            return ApiResponse<UserProfileDto>.Ok(MapToProfile(user), "Profile updated successfully.");
+        }
+
+        public async Task<ApiResponse<bool>> ChangePasswordAsync(ChangePasswordRequest req)
+        {
+            var user = await _context.Users.FindAsync(req.UserId);
+            if (user is null)
+                return ApiResponse<bool>.NotFound($"User #{req.UserId} not found.");
+
+            if (string.IsNullOrEmpty(user.PasswordHash) || !PasswordHelper.Verify(req.CurrentPassword, user.PasswordHash))
+                return ApiResponse<bool>.Fail("Current password is incorrect.");
+
+            user.PasswordHash = PasswordHelper.Hash(req.NewPassword);
+            await _context.SaveChangesAsync();
+
+            return ApiResponse<bool>.Ok(true, "Password changed successfully.");
+        }
+
         // ── private ──────────────────────────────────────────────────────────
+
+        private static UserProfileDto MapToProfile(User u) => new()
+        {
+            UserId      = u.Id,
+            FullName    = u.FullName,
+            Email       = u.Email,
+            FirstName   = u.FirstName,
+            LastName    = u.LastName,
+            PhoneNumber = u.PhoneNumber,
+            Address     = u.Address,
+            City        = u.City,
+            State       = u.State,
+            CountryName = u.CountryName,
+            PostalCode  = u.PostalCode,
+        };
 
         private AuthResponse IssueToken(User user)
         {

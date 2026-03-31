@@ -34,8 +34,9 @@ namespace BookingPlatform.Api.Entities
         public int      FacilityId   { get; set; }
         public Facility? Facility    { get; set; }
 
-        public int      ActivityId   { get; set; }
-        public Activity? Activity    { get; set; }
+        /// <summary>Null when no specific activity is required for this booking (e.g. free-use facilities).</summary>
+        public int?      ActivityId   { get; set; }
+        public Activity? Activity     { get; set; }
 
         /// <summary>Null when no instructor is required for this booking.</summary>
         public int?        InstructorId { get; set; }

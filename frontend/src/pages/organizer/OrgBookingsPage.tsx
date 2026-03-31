@@ -182,7 +182,7 @@ export default function OrgBookingsPage() {
   const pendingCount = bookings.filter(b => b.status === 'Pending').length;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
+    <div className="w-[80%] mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

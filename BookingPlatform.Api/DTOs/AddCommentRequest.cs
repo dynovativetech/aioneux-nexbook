@@ -7,8 +7,9 @@ namespace BookingPlatform.Api.DTOs
         [Required]
         public int AuthorId { get; set; }
 
-        [Required]
-        [MaxLength(1000)]
+        [Required, MaxLength(2000)]
         public string Text { get; set; } = string.Empty;
+
+        public bool IsAdminComment { get; set; }
     }
 }

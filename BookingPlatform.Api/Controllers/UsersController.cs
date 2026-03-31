@@ -28,6 +28,44 @@ namespace BookingPlatform.Api.Controllers
             return Ok(users);
         }
 
+        /// <summary>Count of member portal users (Customer role) in the current tenant.</summary>
+        [HttpGet("member-count")]
+        [Authorize(Roles = $"{Roles.TenantAdmin},{Roles.SuperAdmin}")]
+        public async Task<IActionResult> GetMemberCount()
+        {
+            // Match Customer regardless of DB casing; exclude other roles
+            var q = _context.Users.Where(u => u.Role.ToLower() == Roles.Customer.ToLower());
+
+            if (_tenantContext.IsSuperAdmin)
+            {
+                var count = await q.CountAsync();
+                return Ok(new { count });
+            }
+
+            // JWT may omit tenantId for some accounts — resolve from the logged-in admin user
+            var tenantId = _tenantContext.TenantId;
+            if (!tenantId.HasValue && _tenantContext.UserId > 0)
+            {
+                var me = await _context.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == _tenantContext.UserId);
+                tenantId = me?.TenantId;
+            }
+
+            if (!tenantId.HasValue)
+                return Ok(new { count = 0 });
+
+            var firstTenantId = await _context.Tenants.OrderBy(t => t.Id).Select(t => t.Id).FirstOrDefaultAsync();
+            var singleTenant    = await _context.Tenants.CountAsync() == 1;
+
+            // Customers scoped to this tenant; also legacy rows with TenantId null when only one tenant exists
+            q = q.Where(u =>
+                u.TenantId == tenantId
+                || (singleTenant && u.TenantId == null && tenantId == firstTenantId));
+
+            var memberCount = await q.CountAsync();
+            return Ok(new { count = memberCount });
+        }
+
         /// <summary>Search users within the tenant by email and optional role filter.</summary>
         [HttpGet("search")]
         [Authorize(Roles = $"{Roles.TenantAdmin},{Roles.SuperAdmin}")]

@@ -3,6 +3,8 @@ namespace BookingPlatform.Api.Entities
     public class User
     {
         public int    Id           { get; set; }
+
+        /// <summary>Backward-compatible display name. Auto-derived from FirstName+LastName on profile update.</summary>
         public string FullName     { get; set; } = "";
         public string Email        { get; set; } = "";
 
@@ -15,6 +17,19 @@ namespace BookingPlatform.Api.Entities
         /// <summary>Null for SuperAdmin users who are not scoped to a tenant.</summary>
         public int?    TenantId { get; set; }
         public Tenant? Tenant   { get; set; }
+
+        /// <summary>When false, the user cannot sign in (member management / soft delete).</summary>
+        public bool IsActive { get; set; } = true;
+
+        // ── Extended profile ─────────────────────────────────────────────────
+        public string? FirstName   { get; set; }
+        public string? LastName    { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? Address     { get; set; }
+        public string? City        { get; set; }
+        public string? State       { get; set; }
+        public string? CountryName { get; set; }
+        public string? PostalCode  { get; set; }
 
         public ICollection<Booking>          Bookings        { get; set; } = new List<Booking>();
         public ICollection<Complaint>        Complaints      { get; set; } = new List<Complaint>();

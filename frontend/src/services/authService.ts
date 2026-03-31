@@ -73,6 +73,16 @@ function normalizeRole(role: string): UserRole {
   return ROLE_MAP[role.toLowerCase()] ?? (role as UserRole);
 }
 
+export function updateStoredUser(partial: Partial<User>): void {
+  try {
+    const raw = localStorage.getItem('bp_user');
+    if (!raw) return;
+    const u = JSON.parse(raw) as User;
+    const updated = { ...u, ...partial };
+    localStorage.setItem('bp_user', JSON.stringify(updated));
+  } catch { /* ignore */ }
+}
+
 export function getStoredUser(): User | null {
   try {
     const raw = localStorage.getItem('bp_user');

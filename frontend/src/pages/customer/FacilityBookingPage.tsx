@@ -1,17 +1,18 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Building2, Layers, CalendarDays, Clock3, CheckCircle2,
-  ChevronRight, ChevronLeft, Users, ArrowRight, MapPin,
+  ChevronRight, ChevronLeft, Users, ArrowRight, MapPin, Search,
 } from 'lucide-react';
 import { venueService, type VenueListItem } from '../../services/venueService';
 import { facilityService } from '../../services/facilityService';
 import { availabilityService } from '../../services/availabilityService';
 import { bookingService } from '../../services/bookingService';
+import { getCountries, getCities } from '../../services/locationService';
 import { useAuth } from '../../context/AuthContext';
 import BookingCalendar from '../../components/BookingCalendar';
 import Spinner from '../../components/ui/Spinner';
-import type { Facility, Activity, TimeSlot, Booking } from '../../types';
+import type { Facility, Activity, TimeSlot, Booking, Country, City, Community } from '../../types';
 
 // â”€â”€ Step config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -80,7 +81,7 @@ function SlotGrid({ slots, selected, onSelect, loading }: {
                 ? 'bg-[#0078D7] border-[#0078D7] text-white shadow-md'
                 : 'bg-white border-gray-200 text-gray-700 hover:border-[#0078D7] hover:bg-[#e6f3fc]'}`}
           >
-            {s.label.split('â€“')[0].trim()}
+            {s.label.split('-')[0].trim()}
             {sel && <div className="mt-0.5 text-blue-100">Selected</div>}
           </button>
         );
@@ -193,12 +194,20 @@ export default function FacilityBookingPage() {
 
   const [step, setStep] = useState(0);
 
-  // Data
-  const [venues,     setVenues]     = useState<VenueListItem[]>([]);
-  const [facilities, setFacilities] = useState<Facility[]>([]);
-  const [slots,      setSlots]      = useState<TimeSlot[]>([]);
+  // ── Search state (Step 0) ────────────────────────────────────────────────
+  const [countries,    setCountries]    = useState<Country[]>([]);
+  const [cities,       setCities]       = useState<City[]>([]);
+  const [communities,  setCommunities]  = useState<Community[]>([]);
+  const [countryId,    setCountryId]    = useState<number | null>(null);
+  const [cityId,       setCityId]       = useState<number | null>(null);
+  const [communityId,  setCommunityId]  = useState<number | null>(null);
+  const [searchText,   setSearchText]   = useState('');
+  const [venues,       setVenues]       = useState<VenueListItem[]>([]);
+  const [loadingVenues, setLoadingVenues] = useState(false);
+  const [searchDone,   setSearchDone]   = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Selections
+  // ── Booking state ────────────────────────────────────────────────────────
   const [venue,       setVenue]       = useState<VenueListItem | null>(null);
   const [facility,    setFacility]    = useState<Facility | null>(null);
   const [activity,    setActivity]    = useState<Activity | null>(null);
@@ -206,29 +215,84 @@ export default function FacilityBookingPage() {
   const [slot,        setSlot]        = useState<TimeSlot | null>(null);
   const [participants, setParticipants] = useState(1);
   const [notes,       setNotes]       = useState('');
-
-  // UI state
-  const [loadingVenues,    setLoadingVenues]    = useState(true);
+  const [facilities,  setFacilities]  = useState<Facility[]>([]);
+  const [slots,       setSlots]       = useState<TimeSlot[]>([]);
   const [loadingFacilities, setLoadingFacilities] = useState(false);
-  const [loadingSlots,     setLoadingSlots]     = useState(false);
-  const [submitting,       setSubmitting]       = useState(false);
-  const [error,            setError]            = useState('');
-  const [confirmed,        setConfirmed]        = useState<Booking | null>(null);
+  const [loadingSlots,     setLoadingSlots]       = useState(false);
+  const [submitting,       setSubmitting]         = useState(false);
+  const [error,            setError]              = useState('');
+  const [confirmed,        setConfirmed]          = useState<Booking | null>(null);
 
-  // Load venues
+  // Load countries on mount
   useEffect(() => {
+    getCountries().then(setCountries).catch(() => {});
+  }, []);
+
+  // Cascade: country → cities
+  useEffect(() => {
+    setCities([]); setCommunities([]);
+    setCityId(null); setCommunityId(null);
+    if (countryId) getCities(countryId).then(setCities).catch(() => {});
+  }, [countryId]);
+
+  // Cascade: city → areas → communities
+  useEffect(() => {
+    setCommunities([]); setCommunityId(null);
+    if (!cityId) return;
+    import('../../services/locationService').then(({ getAreas, getCommunities: getComms }) => {
+      getAreas(cityId)
+        .then(areas => Promise.all(areas.map(a => getComms(a.id))))
+        .then(nested => setCommunities(nested.flat()))
+        .catch(() => {});
+    });
+  }, [cityId]);
+
+  // Debounced search trigger
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (searchText.trim() || communityId || countryId) doSearch();
+    }, 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchText, communityId]); // eslint-disable-line
+
+  function doSearch() {
     setLoadingVenues(true);
-    venueService.list({ activeOnly: true })
+    setSearchDone(false);
+    venueService.list({
+      activeOnly:  true,
+      communityId: communityId ?? undefined,
+      search:      searchText.trim() || undefined,
+    })
       .then(data => {
         const list = Array.isArray(data) ? data : [];
         setVenues(list);
-        if (preVenueId) {
+        setSearchDone(true);
+        // Handle deep-link pre-selection
+        if (preVenueId && !venue) {
           const pre = list.find(v => v.id === preVenueId);
-          if (pre) { setVenue(pre); setStep(preFacilityId ? 1 : 1); }
+          if (pre) { setVenue(pre); setStep(1); }
         }
       })
-      .catch(() => {})
+      .catch(() => { setVenues([]); setSearchDone(true); })
       .finally(() => setLoadingVenues(false));
+  }
+
+  // Handle pre-selected venue from URL on mount
+  useEffect(() => {
+    if (preVenueId) {
+      setLoadingVenues(true);
+      venueService.list({ activeOnly: true })
+        .then(data => {
+          const list = Array.isArray(data) ? data : [];
+          setVenues(list);
+          setSearchDone(true);
+          const pre = list.find(v => v.id === preVenueId);
+          if (pre) { setVenue(pre); setStep(1); }
+        })
+        .catch(() => {})
+        .finally(() => setLoadingVenues(false));
+    }
   }, []); // eslint-disable-line
 
   // Load facilities when venue selected
@@ -288,14 +352,17 @@ export default function FacilityBookingPage() {
     setError('');
     setSubmitting(true);
     try {
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr   = date.toISOString().split('T')[0];
       const startTime = `${dateStr}T${slot.startTime.includes('T') ? slot.startTime.split('T')[1] : slot.startTime}`;
       const endTime   = `${dateStr}T${slot.endTime.includes('T')   ? slot.endTime.split('T')[1]   : slot.endTime}`;
+
+      // Only include activityId if a valid one is selected/available
+      const resolvedActivityId = activity?.id ?? linkedActivities[0]?.id;
 
       const res = await bookingService.create({
         userId:           user.id,
         facilityId:       facility.id,
-        activityId:       activity?.id ?? (linkedActivities[0]?.id ?? 0),
+        ...(resolvedActivityId ? { activityId: resolvedActivityId } : {}),
         startTime,
         endTime,
         participantCount: participants,
@@ -306,8 +373,16 @@ export default function FacilityBookingPage() {
       } else {
         setError(res.message ?? 'Booking failed. Please try again.');
       }
-    } catch {
-      setError('Booking failed. Please try again.');
+    } catch (err) {
+      // Extract the real error message from the API response if available
+      const apiMsg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string; errors?: string[] } } })
+              .response?.data?.message ??
+            (err as { response?: { data?: { errors?: string[] } } })
+              .response?.data?.errors?.join(', ')
+          : null;
+      setError(apiMsg || 'Booking failed. Please check the details and try again.');
     } finally {
       setSubmitting(false);
     }
@@ -317,10 +392,12 @@ export default function FacilityBookingPage() {
     setStep(0); setVenue(null); setFacility(null); setActivity(null);
     setDate(null); setSlot(null); setParticipants(1); setNotes('');
     setConfirmed(null); setError('');
+    setCountryId(null); setCityId(null); setCommunityId(null);
+    setSearchText(''); setVenues([]); setSearchDone(false);
   }
 
   if (confirmed) return (
-    <div className="max-w-5xl mx-auto">
+    <div className="w-[80%] mx-auto">
       <BookingSuccessScreen booking={confirmed} onNew={reset} />
     </div>
   );
@@ -333,13 +410,13 @@ export default function FacilityBookingPage() {
   ][step] ?? true;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5">
+    <div className="w-[80%] mx-auto space-y-5">
       <StepBar current={step} />
 
       {error && (
         <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex justify-between">
           <span>{error}</span>
-          <button onClick={() => setError('')} className="text-red-400 hover:text-red-600">Ã—</button>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-600">x</button>
         </div>
       )}
 
@@ -351,31 +428,112 @@ export default function FacilityBookingPage() {
             <h2 className="font-semibold text-gray-800">{STEPS[step].label}</h2>
           </div>
 
-          {/* Step 0: Venue */}
+          {/* Step 0: Search & select venue */}
           {step === 0 && (
-            loadingVenues ? <Spinner /> : venues.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-8">No venues available.</p>
-            ) : (
+            <div className="space-y-4">
+              {/* Search filters */}
               <div className="grid sm:grid-cols-2 gap-3">
-                {venues.map(v => (
-                  <button
-                    key={v.id}
-                    onClick={() => { setVenue(v); setFacility(null); setActivity(null); }}
-                    className={`group text-left rounded-xl border-2 p-4 transition-all
-                      ${venue?.id === v.id ? 'border-[#0078D7] bg-[#e6f3fc]' : 'border-gray-200 hover:border-[#66b7ed]'}`}
+                {/* Country */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Country</label>
+                  <select
+                    value={countryId ?? ''}
+                    onChange={e => setCountryId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0078D7]/25 focus:border-[#0078D7] bg-white"
                   >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="font-semibold text-gray-800 text-sm">{v.name}</p>
-                      {venue?.id === v.id && <CheckCircle2 size={16} className="text-[#0078D7] flex-shrink-0" />}
-                    </div>
-                    <p className="text-xs text-gray-500 flex items-center gap-1">
-                      <MapPin size={10} /> {v.communityName}
-                    </p>
-                    <p className="text-xs text-[#0078D7] mt-2">{v.facilityCount} facilit{v.facilityCount === 1 ? 'y' : 'ies'}</p>
-                  </button>
-                ))}
+                    <option value="">All countries</option>
+                    {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+
+                {/* City */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                  <select
+                    value={cityId ?? ''}
+                    onChange={e => setCityId(e.target.value ? Number(e.target.value) : null)}
+                    disabled={cities.length === 0}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0078D7]/25 focus:border-[#0078D7] bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                  >
+                    <option value="">All cities</option>
+                    {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
               </div>
-            )
+
+              {/* Community */}
+              {communities.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Community</label>
+                  <select
+                    value={communityId ?? ''}
+                    onChange={e => setCommunityId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0078D7]/25 focus:border-[#0078D7] bg-white"
+                  >
+                    <option value="">All communities</option>
+                    {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* Search text */}
+              <div className="relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                  <Search size={15} />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search venue or facility by name..."
+                  value={searchText}
+                  onChange={e => setSearchText(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0078D7]/25 focus:border-[#0078D7]"
+                />
+              </div>
+
+              <button
+                onClick={doSearch}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#0078D7] to-[#025DB6] hover:from-[#0087e0] hover:to-[#0169C9] text-white text-sm font-semibold py-2.5 rounded-xl shadow-sm transition-colors"
+              >
+                <Search size={14} /> Search Venues
+              </button>
+
+              {/* Results */}
+              {loadingVenues && (
+                <div className="py-6 flex justify-center"><Spinner /></div>
+              )}
+
+              {!loadingVenues && searchDone && venues.length === 0 && (
+                <div className="py-8 text-center text-gray-400 text-sm">
+                  <Building2 size={24} className="mx-auto mb-2 opacity-30" />
+                  No venues found. Try adjusting your search.
+                </div>
+              )}
+
+              {!loadingVenues && venues.length > 0 && (
+                <>
+                  <p className="text-xs text-gray-400">{venues.length} venue{venues.length !== 1 ? 's' : ''} found</p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {venues.map(v => (
+                      <button
+                        key={v.id}
+                        onClick={() => { setVenue(v); setFacility(null); setActivity(null); }}
+                        className={`group text-left rounded-xl border-2 p-4 transition-all
+                          ${venue?.id === v.id ? 'border-[#0078D7] bg-[#e6f3fc]' : 'border-gray-200 hover:border-[#66b7ed]'}`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="font-semibold text-gray-800 text-sm">{v.name}</p>
+                          {venue?.id === v.id && <CheckCircle2 size={16} className="text-[#0078D7] flex-shrink-0" />}
+                        </div>
+                        <p className="text-xs text-gray-500 flex items-center gap-1">
+                          <MapPin size={10} /> {v.communityName}
+                        </p>
+                        <p className="text-xs text-[#0078D7] mt-2">{v.facilityCount} facilit{v.facilityCount === 1 ? 'y' : 'ies'}</p>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           {/* Step 1: Facility */}
@@ -485,7 +643,7 @@ export default function FacilityBookingPage() {
                     onClick={() => setParticipants(p => Math.max(1, p - 1))}
                     className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600 font-bold"
                   >
-                    âˆ’
+                    -
                   </button>
                   <span className="w-8 text-center font-semibold text-gray-800">{participants}</span>
                   <button
@@ -502,7 +660,7 @@ export default function FacilityBookingPage() {
                 <textarea
                   rows={3}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0078D7]/30 resize-none"
-                  placeholder="Any special requests or notes for the organizerâ€¦"
+                  placeholder="Any special requests or notes for the organizer..."
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                 />
@@ -553,7 +711,7 @@ export default function FacilityBookingPage() {
                     bg-gradient-to-r from-[#0078D7] to-[#025DB6] hover:from-[#0087e0] hover:to-[#0169C9] disabled:opacity-40
                     px-5 py-2.5 rounded-xl transition-colors shadow-sm"
                 >
-                  {submitting ? 'Confirmingâ€¦' : 'Confirm Booking'}
+                  {submitting ? 'Confirming...' : 'Confirm Booking'}
                   {!submitting && <CheckCircle2 size={15} />}
                 </button>
               )}

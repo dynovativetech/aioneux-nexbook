@@ -8,6 +8,41 @@ export interface User {
   email: string;
   role: UserRole;
   tenantId?: number;
+  // Extended profile fields
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  countryName?: string;
+  postalCode?: string;
+}
+
+export interface UserProfileDto {
+  userId: number;
+  fullName: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  countryName?: string;
+  postalCode?: string;
+}
+
+export interface UpdateProfileRequest {
+  userId: number;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  countryName?: string;
+  postalCode?: string;
 }
 
 export interface AuthResponse {
@@ -323,6 +358,11 @@ export interface Booking {
   userName: string;
   facilityId: number;
   facilityName: string;
+  venueId?: number;
+  venueName?: string;
+  communityName?: string;
+  areaName?: string;
+  cityName?: string;
   activityId: number;
   activityName: string;
   instructorId?: number;
@@ -344,7 +384,7 @@ export interface Booking {
 export interface CreateBookingRequest {
   userId: number;
   facilityId: number;
-  activityId: number;
+  activityId?: number;
   instructorId?: number;
   startTime: string;
   endTime: string;
@@ -418,34 +458,63 @@ export interface ResourceAvailabilityResponse {
 }
 
 // ── Complaints ───────────────────────────────────────────────────────────────
-export type ComplaintStatus = 'Open' | 'InProgress' | 'Resolved' | 'Rejected';
+export type ComplaintStatus =
+  | 'Open'
+  | 'InProgress'
+  | 'Resolved'
+  | 'Rejected'
+  | 'Cancelled'
+  | 'Closed'
+  | 'ActionRequired'
+  | 'MoreInfoRequired';
+
+export const COMPLAINT_STATUSES: ComplaintStatus[] = [
+  'Open', 'InProgress', 'Resolved', 'Rejected',
+  'Cancelled', 'Closed', 'ActionRequired', 'MoreInfoRequired',
+];
 
 export interface ComplaintComment {
   id: number;
   authorId: number;
   authorName: string;
   text: string;
+  isAdminComment: boolean;
+  isSystemComment: boolean;
+  imageUrl?: string;
   createdAt: string;
 }
 
 export interface Complaint {
   id: number;
   tenantId: number;
-  bookingId: number;
+  bookingId?: number;
+  categoryId?: number;
+  category?: string;
   userId: number;
   userName: string;
   title: string;
   description: string;
+  imageUrls: string[];
   status: ComplaintStatus;
   createdAt: string;
+  updatedAt?: string;
   comments: ComplaintComment[];
 }
 
+export interface ComplaintCategory {
+  id: number;
+  name: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
 export interface CreateComplaintRequest {
-  bookingId: number;
+  bookingId?: number;
   userId: number;
   title: string;
   description: string;
+  categoryId?: number;
+  category?: string;
 }
 
 // ── Generic API envelope ─────────────────────────────────────────────────────

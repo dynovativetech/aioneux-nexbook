@@ -56,6 +56,7 @@ namespace BookingPlatform.Api.Data
         // ── Support tables ───────────────────────────────────────────────────
         public DbSet<Complaint>            Complaints             { get; set; }
         public DbSet<ComplaintComment>     ComplaintComments      { get; set; }
+        public DbSet<ComplaintCategory>    ComplaintCategories    { get; set; }
         public DbSet<AuditLog>             AuditLogs              { get; set; }
         public DbSet<NotificationLog>      NotificationLogs       { get; set; }
 
@@ -159,6 +160,7 @@ namespace BookingPlatform.Api.Data
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.Property(u => u.Role).HasMaxLength(50).IsRequired();
+                entity.Property(u => u.IsActive).HasDefaultValue(true);
                 entity.HasIndex(u => u.TenantId);
             });
 
@@ -450,7 +452,7 @@ namespace BookingPlatform.Api.Data
                 entity.HasOne(b => b.Activity)
                     .WithMany(a => a.Bookings)
                     .HasForeignKey(b => b.ActivityId)
-                    .IsRequired()
+                    .IsRequired(false)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(b => b.Instructor)
@@ -545,6 +547,17 @@ namespace BookingPlatform.Api.Data
                 entity.Property(s => s.CertificationNote).HasMaxLength(255);
             });
 
+            // ── ComplaintCategory ─────────────────────────────────────────────
+            modelBuilder.Entity<ComplaintCategory>(entity =>
+            {
+                entity.HasOne(c => c.Tenant)
+                    .WithMany()
+                    .HasForeignKey(c => c.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Property(c => c.Name).HasMaxLength(100).IsRequired();
+            });
+
             // ── Complaint ─────────────────────────────────────────────────────
             modelBuilder.Entity<Complaint>(entity =>
             {
@@ -556,7 +569,7 @@ namespace BookingPlatform.Api.Data
                 entity.HasOne(c => c.Booking)
                     .WithMany(b => b.Complaints)
                     .HasForeignKey(c => c.BookingId)
-                    .IsRequired()
+                    .IsRequired(false)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(c => c.User)
@@ -565,8 +578,15 @@ namespace BookingPlatform.Api.Data
                     .IsRequired()
                     .OnDelete(DeleteBehavior.Restrict);
 
+                entity.HasOne(c => c.ComplaintCategory)
+                    .WithMany()
+                    .HasForeignKey(c => c.CategoryId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.SetNull);
+
                 entity.Property(c => c.Title).HasMaxLength(200).IsRequired();
                 entity.Property(c => c.Description).HasMaxLength(2000).IsRequired();
+                entity.Property(c => c.Category).HasMaxLength(100);
                 entity.HasIndex(c => c.TenantId);
 
                 entity.HasQueryFilter(c => _tenantContext == null || _tenantContext.IsSuperAdmin || c.TenantId == _tenantContext.TenantId);
@@ -587,7 +607,8 @@ namespace BookingPlatform.Api.Data
                     .IsRequired()
                     .OnDelete(DeleteBehavior.Restrict);
 
-                entity.Property(cc => cc.Text).HasMaxLength(1000).IsRequired();
+                entity.Property(cc => cc.Text).HasMaxLength(2000).IsRequired();
+                entity.Property(cc => cc.ImagePath).HasMaxLength(500);
             });
 
             // ── AuditLog ──────────────────────────────────────────────────────

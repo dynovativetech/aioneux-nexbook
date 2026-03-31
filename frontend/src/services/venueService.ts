@@ -14,7 +14,9 @@ export interface VenueListItem {
 
 export interface VenueOperatingHours {
   id: number;
-  dayOfWeek: number;
+  /** API sends the C# DayOfWeek enum as a string ("Sunday"…"Saturday").
+   *  Some internal pages initialise it as a number (0–6) before saving. */
+  dayOfWeek: number | string;
   openTime: string;
   closeTime: string;
   isClosed: boolean;
