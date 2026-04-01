@@ -23,10 +23,6 @@ function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 function daysUntilLabel(iso: string): { label: string; cls: string } {
   const diff = Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
   if (diff < 0)   return { label: 'Past',       cls: 'bg-gray-100 text-gray-500' };

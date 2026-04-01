@@ -12,6 +12,14 @@ import {
   type CreateMemberPayload,
   type UpdateMemberPayload,
 } from '../../services/memberService';
+import { locationService } from '../../services/locationService';
+import type { Country, City, Area, Community } from '../../types';
+
+const UAE_NAME = 'United Arab Emirates';
+const UAE_CODE = 'AE';
+const EMIRATES = [
+  'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah',
+];
 
 function toast(ok: boolean, msg: string, set: (v: { ok: boolean; msg: string } | null) => void) {
   set({ ok, msg });
@@ -35,17 +43,36 @@ export default function ManageMembersPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<CreateMemberPayload & { isActive: boolean }>({
     email: '',
-    fullName: '',
     firstName: '',
     lastName: '',
     phoneNumber: '',
-    address: '',
+    landlinePhone: '',
+    apartmentOrVillaNumber: '',
+    streetAddress: '',
     city: '',
     state: '',
     countryName: '',
+    emirate: '',
     postalCode: '',
+    areaId: 0,
+    communityId: 0,
     isActive: true,
   });
+
+  // Location dropdown state
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
+  const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
+
+  const isUae = (() => {
+    const c = countries.find((x) => x.id === selectedCountryId);
+    if (c?.code?.toUpperCase() === UAE_CODE) return true;
+    return form.countryName.trim().toLowerCase() === UAE_NAME.toLowerCase()
+      || form.countryName.trim().toUpperCase() === 'UAE';
+  })();
 
   const [passwordModal, setPasswordModal] = useState<{ title: string; password: string } | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -66,6 +93,37 @@ export default function ManageMembersPage() {
   useEffect(() => {
     load();
   }, []);
+
+  // Load countries once
+  useEffect(() => {
+    locationService.getCountries()
+      .then((cs) => setCountries(cs))
+      .catch(() => setCountries([]));
+  }, []);
+
+  // Load cities when country changes
+  useEffect(() => {
+    if (!selectedCountryId) { setCities([]); setSelectedCityId(null); return; }
+    locationService.getCities(selectedCountryId)
+      .then((list) => setCities(list))
+      .catch(() => setCities([]));
+  }, [selectedCountryId]);
+
+  // Load areas when city changes
+  useEffect(() => {
+    if (!selectedCityId) { setAreas([]); return; }
+    locationService.getAreas(selectedCityId)
+      .then((list) => setAreas(list))
+      .catch(() => setAreas([]));
+  }, [selectedCityId]);
+
+  // Load communities when area changes
+  useEffect(() => {
+    if (!form.areaId) { setCommunities([]); return; }
+    locationService.getCommunities(form.areaId)
+      .then((list) => setCommunities(list))
+      .catch(() => setCommunities([]));
+  }, [form.areaId]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -93,17 +151,23 @@ export default function ManageMembersPage() {
     setEditingId(null);
     setForm({
       email: '',
-      fullName: '',
       firstName: '',
       lastName: '',
       phoneNumber: '',
-      address: '',
+      landlinePhone: '',
+      apartmentOrVillaNumber: '',
+      streetAddress: '',
       city: '',
       state: '',
       countryName: '',
+      emirate: '',
       postalCode: '',
+      areaId: 0,
+      communityId: 0,
       isActive: true,
     });
+    setSelectedCountryId(null);
+    setSelectedCityId(null);
     setModalOpen(true);
   }
 
@@ -116,17 +180,25 @@ export default function ManageMembersPage() {
       const d: AdminMemberDetail = await memberService.get(m.id);
       setForm({
         email: d.email,
-        fullName: d.fullName,
         firstName: d.firstName ?? '',
         lastName: d.lastName ?? '',
         phoneNumber: d.phoneNumber ?? '',
-        address: d.address ?? '',
+        landlinePhone: d.landlinePhone ?? '',
+        apartmentOrVillaNumber: d.apartmentOrVillaNumber ?? '',
+        streetAddress: d.streetAddress ?? '',
         city: d.city ?? '',
         state: d.state ?? '',
         countryName: d.countryName ?? '',
+        emirate: d.emirate ?? '',
         postalCode: d.postalCode ?? '',
+        areaId: d.areaId ?? 0,
+        communityId: d.communityId ?? 0,
         isActive: d.isActive,
       });
+      // Best-effort: preselect country by name
+      const matchCountry = countries.find((c) => c.name.toLowerCase() === (d.countryName ?? '').toLowerCase());
+      setSelectedCountryId(matchCountry?.id ?? null);
+      setSelectedCityId(null);
     } catch {
       toast(false, 'Failed to load member.', setToastMsg);
       setModalOpen(false);
@@ -135,9 +207,33 @@ export default function ManageMembersPage() {
     }
   }
 
+  // When cities load, auto-select the one matching the stored city text
+  useEffect(() => {
+    if (!modalOpen) return;
+    if (!cities.length) return;
+    if (selectedCityId) return;
+    if (!form.city.trim()) return;
+    const match = cities.find((c) => c.name.toLowerCase() === form.city.trim().toLowerCase());
+    if (match) setSelectedCityId(match.id);
+  }, [modalOpen, cities, selectedCityId, form.city]);
+
   async function handleSave() {
-    if (!form.fullName.trim() || !form.email.trim()) {
-      toast(false, 'Name and email are required.', setToastMsg);
+    const missing: string[] = [];
+    if (!form.firstName.trim()) missing.push('First name');
+    if (!form.lastName.trim()) missing.push('Last name');
+    if (!form.email.trim()) missing.push('Email');
+    if (!form.phoneNumber.trim()) missing.push('Mobile number');
+    // phone is optional
+    if (!form.streetAddress.trim()) missing.push('Street address');
+    if (!form.city.trim()) missing.push('City');
+    if (!form.state.trim()) missing.push('State');
+    if (!form.countryName.trim()) missing.push('Country');
+    if (!form.areaId) missing.push('Area');
+    if (!form.communityId) missing.push('Community');
+    if (isUae && !form.emirate?.trim()) missing.push('Emirate');
+
+    if (missing.length) {
+      toast(false, `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required.`, setToastMsg);
       return;
     }
     setSaving(true);
@@ -145,15 +241,19 @@ export default function ManageMembersPage() {
       if (modalMode === 'create') {
         const payload: CreateMemberPayload = {
           email: form.email.trim(),
-          fullName: form.fullName.trim(),
-          firstName: form.firstName?.trim() || undefined,
-          lastName: form.lastName?.trim() || undefined,
-          phoneNumber: form.phoneNumber?.trim() || undefined,
-          address: form.address?.trim() || undefined,
-          city: form.city?.trim() || undefined,
-          state: form.state?.trim() || undefined,
-          countryName: form.countryName?.trim() || undefined,
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          phoneNumber: form.phoneNumber.trim(),
+          landlinePhone: form.landlinePhone?.trim() || undefined,
+          apartmentOrVillaNumber: form.apartmentOrVillaNumber?.trim() || undefined,
+          streetAddress: form.streetAddress.trim(),
+          city: form.city.trim(),
+          state: form.state.trim(),
+          countryName: form.countryName.trim(),
+          emirate: form.emirate?.trim() || undefined,
           postalCode: form.postalCode?.trim() || undefined,
+          areaId: form.areaId,
+          communityId: form.communityId,
         };
         const res = await memberService.create(payload);
         setModalOpen(false);
@@ -166,15 +266,19 @@ export default function ManageMembersPage() {
       } else if (editingId !== null) {
         const payload: UpdateMemberPayload = {
           email: form.email.trim(),
-          fullName: form.fullName.trim(),
-          firstName: form.firstName?.trim() || undefined,
-          lastName: form.lastName?.trim() || undefined,
-          phoneNumber: form.phoneNumber?.trim() || undefined,
-          address: form.address?.trim() || undefined,
-          city: form.city?.trim() || undefined,
-          state: form.state?.trim() || undefined,
-          countryName: form.countryName?.trim() || undefined,
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          phoneNumber: form.phoneNumber.trim(),
+          landlinePhone: form.landlinePhone?.trim() || undefined,
+          apartmentOrVillaNumber: form.apartmentOrVillaNumber?.trim() || undefined,
+          streetAddress: form.streetAddress.trim(),
+          city: form.city.trim(),
+          state: form.state.trim(),
+          countryName: form.countryName.trim(),
+          emirate: form.emirate?.trim() || undefined,
           postalCode: form.postalCode?.trim() || undefined,
+          areaId: form.areaId,
+          communityId: form.communityId,
           isActive: form.isActive,
         };
         await memberService.update(editingId, payload);
@@ -466,10 +570,10 @@ export default function ManageMembersPage() {
           <div className="space-y-4 max-h-[70svh] overflow-y-auto pr-1" onClick={(e) => e.stopPropagation()}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="block text-xs font-semibold text-gray-500">
-                Full name *
+                First name *
                 <input
-                  value={form.fullName}
-                  onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+                  value={form.firstName}
+                  onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
                   className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20"
                 />
               </label>
@@ -483,15 +587,7 @@ export default function ManageMembersPage() {
                 />
               </label>
               <label className="block text-xs font-semibold text-gray-500">
-                First name
-                <input
-                  value={form.firstName}
-                  onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20"
-                />
-              </label>
-              <label className="block text-xs font-semibold text-gray-500">
-                Last name
+                Last name *
                 <input
                   value={form.lastName}
                   onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
@@ -499,7 +595,7 @@ export default function ManageMembersPage() {
                 />
               </label>
               <label className="block text-xs font-semibold text-gray-500">
-                Phone
+                Mobile number *
                 <input
                   value={form.phoneNumber}
                   onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
@@ -507,23 +603,70 @@ export default function ManageMembersPage() {
                 />
               </label>
               <label className="block text-xs font-semibold text-gray-500">
-                City
+                Phone
                 <input
-                  value={form.city}
-                  onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20"
-                />
-              </label>
-              <label className="block text-xs font-semibold text-gray-500 sm:col-span-2">
-                Address
-                <input
-                  value={form.address}
-                  onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                  value={form.landlinePhone}
+                  onChange={(e) => setForm((f) => ({ ...f, landlinePhone: e.target.value }))}
                   className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20"
                 />
               </label>
               <label className="block text-xs font-semibold text-gray-500">
-                State / Province
+                Apartment / Villa no.
+                <input
+                  value={form.apartmentOrVillaNumber ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, apartmentOrVillaNumber: e.target.value }))}
+                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-gray-500 sm:col-span-2">
+                Street address *
+                <input
+                  value={form.streetAddress}
+                  onChange={(e) => setForm((f) => ({ ...f, streetAddress: e.target.value }))}
+                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-gray-500">
+                Country *
+                <select
+                  value={selectedCountryId ?? ''}
+                  onChange={(e) => {
+                    const id = e.target.value ? Number(e.target.value) : null;
+                    setSelectedCountryId(id);
+                    const c = countries.find((x) => x.id === id);
+                    setForm((f) => ({ ...f, countryName: c?.name ?? '' }));
+                    setSelectedCityId(null);
+                    setForm((f) => ({ ...f, areaId: 0, communityId: 0 }));
+                  }}
+                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20"
+                >
+                  <option value="">Select country</option>
+                  {countries.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-gray-500">
+                City *
+                <select
+                  value={selectedCityId ?? ''}
+                  onChange={(e) => {
+                    const id = e.target.value ? Number(e.target.value) : null;
+                    setSelectedCityId(id);
+                    const c = cities.find((x) => x.id === id);
+                    setForm((f) => ({ ...f, city: c?.name ?? '', areaId: 0, communityId: 0 }));
+                  }}
+                  disabled={!selectedCountryId}
+                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none disabled:opacity-50"
+                >
+                  <option value="">{selectedCountryId ? 'Select city' : 'Select country first'}</option>
+                  {cities.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-gray-500">
+                State *
                 <input
                   value={form.state}
                   onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))}
@@ -531,12 +674,46 @@ export default function ManageMembersPage() {
                 />
               </label>
               <label className="block text-xs font-semibold text-gray-500">
-                Country
-                <input
-                  value={form.countryName}
-                  onChange={(e) => setForm((f) => ({ ...f, countryName: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20"
-                />
+                Emirate {isUae ? '*' : '(optional)'}
+                <select
+                  value={form.emirate ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, emirate: e.target.value }))}
+                  disabled={!isUae}
+                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none disabled:opacity-50"
+                >
+                  <option value="">{isUae ? 'Select emirate' : 'Only for UAE'}</option>
+                  {EMIRATES.map((e) => (
+                    <option key={e} value={e}>{e}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-gray-500">
+                Area *
+                <select
+                  value={form.areaId || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, areaId: Number(e.target.value), communityId: 0 }))}
+                  disabled={!selectedCityId}
+                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none disabled:opacity-50"
+                >
+                  <option value="">{selectedCityId ? 'Select area' : 'Select city first'}</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-gray-500">
+                Community *
+                <select
+                  value={form.communityId || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, communityId: Number(e.target.value) }))}
+                  disabled={!form.areaId}
+                  className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none disabled:opacity-50"
+                >
+                  <option value="">{form.areaId ? 'Select community' : 'Select area first'}</option>
+                  {communities.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </label>
               <label className="block text-xs font-semibold text-gray-500">
                 PO Box / Postal code

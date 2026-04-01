@@ -37,8 +37,13 @@ namespace BookingPlatform.Api.Controllers
                     FirstName = u.FirstName,
                     LastName = u.LastName,
                     PhoneNumber = u.PhoneNumber,
+                    LandlinePhone = u.LandlinePhone,
                     City = u.City,
                     CountryName = u.CountryName,
+                    AreaId = u.AreaId,
+                    AreaName = u.Area != null ? u.Area.Name : null,
+                    CommunityId = u.CommunityId,
+                    CommunityName = u.Community != null ? u.Community.Name : null,
                     IsActive = u.IsActive,
                 })
                 .ToListAsync();
@@ -60,11 +65,18 @@ namespace BookingPlatform.Api.Controllers
                 FirstName = u.FirstName,
                 LastName = u.LastName,
                 PhoneNumber = u.PhoneNumber,
-                Address = u.Address,
+                LandlinePhone = u.LandlinePhone,
+                ApartmentOrVillaNumber = u.ApartmentOrVillaNumber,
+                StreetAddress = u.StreetAddress,
                 City = u.City,
                 State = u.State,
                 CountryName = u.CountryName,
+                Emirate = u.Emirate,
                 PostalCode = u.PostalCode,
+                AreaId = u.AreaId,
+                AreaName = u.Area?.Name,
+                CommunityId = u.CommunityId,
+                CommunityName = u.Community?.Name,
                 IsActive = u.IsActive,
             };
             return Ok(dto);
@@ -81,21 +93,31 @@ namespace BookingPlatform.Api.Controllers
             if (await _context.Users.AnyAsync(u => u.Email.ToLower() == email))
                 return BadRequest(ApiResponse<object>.Fail("A user with this email already exists."));
 
+            var isUae = req.CountryName.Trim().Equals("United Arab Emirates", StringComparison.OrdinalIgnoreCase)
+                        || req.CountryName.Trim().Equals("UAE", StringComparison.OrdinalIgnoreCase);
+            if (isUae && string.IsNullOrWhiteSpace(req.Emirate))
+                return BadRequest(ApiResponse<object>.Fail("Emirate is required for United Arab Emirates."));
+
             var tempPassword = GeneratePassword();
             var user = new User
             {
                 TenantId = tid.Value,
                 Role = Roles.Customer,
-                FullName = req.FullName.Trim(),
+                FullName = $"{req.FirstName} {req.LastName}".Trim(),
                 Email = email,
-                FirstName = string.IsNullOrWhiteSpace(req.FirstName) ? null : req.FirstName.Trim(),
-                LastName = string.IsNullOrWhiteSpace(req.LastName) ? null : req.LastName.Trim(),
-                PhoneNumber = string.IsNullOrWhiteSpace(req.PhoneNumber) ? null : req.PhoneNumber.Trim(),
-                Address = string.IsNullOrWhiteSpace(req.Address) ? null : req.Address.Trim(),
-                City = string.IsNullOrWhiteSpace(req.City) ? null : req.City.Trim(),
-                State = string.IsNullOrWhiteSpace(req.State) ? null : req.State.Trim(),
-                CountryName = string.IsNullOrWhiteSpace(req.CountryName) ? null : req.CountryName.Trim(),
+                FirstName = req.FirstName.Trim(),
+                LastName = req.LastName.Trim(),
+                PhoneNumber = req.PhoneNumber.Trim(),
+                LandlinePhone = string.IsNullOrWhiteSpace(req.LandlinePhone) ? null : req.LandlinePhone.Trim(),
+                ApartmentOrVillaNumber = string.IsNullOrWhiteSpace(req.ApartmentOrVillaNumber) ? null : req.ApartmentOrVillaNumber.Trim(),
+                StreetAddress = req.StreetAddress.Trim(),
+                City = req.City.Trim(),
+                State = req.State.Trim(),
+                CountryName = req.CountryName.Trim(),
+                Emirate = string.IsNullOrWhiteSpace(req.Emirate) ? null : req.Emirate.Trim(),
                 PostalCode = string.IsNullOrWhiteSpace(req.PostalCode) ? null : req.PostalCode.Trim(),
+                AreaId = req.AreaId,
+                CommunityId = req.CommunityId,
                 PasswordHash = PasswordHelper.Hash(tempPassword),
                 IsActive = true,
             };
@@ -123,16 +145,26 @@ namespace BookingPlatform.Api.Controllers
             if (await _context.Users.AnyAsync(u => u.Id != id && u.Email.ToLower() == email))
                 return BadRequest(ApiResponse<object>.Fail("Another user already uses this email."));
 
-            user.FullName = req.FullName.Trim();
+            var isUae = req.CountryName.Trim().Equals("United Arab Emirates", StringComparison.OrdinalIgnoreCase)
+                        || req.CountryName.Trim().Equals("UAE", StringComparison.OrdinalIgnoreCase);
+            if (isUae && string.IsNullOrWhiteSpace(req.Emirate))
+                return BadRequest(ApiResponse<object>.Fail("Emirate is required for United Arab Emirates."));
+
+            user.FullName = $"{req.FirstName} {req.LastName}".Trim();
             user.Email = email;
-            user.FirstName = string.IsNullOrWhiteSpace(req.FirstName) ? null : req.FirstName.Trim();
-            user.LastName = string.IsNullOrWhiteSpace(req.LastName) ? null : req.LastName.Trim();
-            user.PhoneNumber = string.IsNullOrWhiteSpace(req.PhoneNumber) ? null : req.PhoneNumber.Trim();
-            user.Address = string.IsNullOrWhiteSpace(req.Address) ? null : req.Address.Trim();
-            user.City = string.IsNullOrWhiteSpace(req.City) ? null : req.City.Trim();
-            user.State = string.IsNullOrWhiteSpace(req.State) ? null : req.State.Trim();
-            user.CountryName = string.IsNullOrWhiteSpace(req.CountryName) ? null : req.CountryName.Trim();
+            user.FirstName = req.FirstName.Trim();
+            user.LastName = req.LastName.Trim();
+            user.PhoneNumber = req.PhoneNumber.Trim();
+            user.LandlinePhone = string.IsNullOrWhiteSpace(req.LandlinePhone) ? null : req.LandlinePhone.Trim();
+            user.ApartmentOrVillaNumber = string.IsNullOrWhiteSpace(req.ApartmentOrVillaNumber) ? null : req.ApartmentOrVillaNumber.Trim();
+            user.StreetAddress = req.StreetAddress.Trim();
+            user.City = req.City.Trim();
+            user.State = req.State.Trim();
+            user.CountryName = req.CountryName.Trim();
+            user.Emirate = string.IsNullOrWhiteSpace(req.Emirate) ? null : req.Emirate.Trim();
             user.PostalCode = string.IsNullOrWhiteSpace(req.PostalCode) ? null : req.PostalCode.Trim();
+            user.AreaId = req.AreaId;
+            user.CommunityId = req.CommunityId;
             user.IsActive = req.IsActive;
 
             await _context.SaveChangesAsync();
@@ -191,7 +223,10 @@ namespace BookingPlatform.Api.Controllers
             var firstId = await _context.Tenants.OrderBy(t => t.Id).Select(t => t.Id).FirstOrDefaultAsync();
             var single = await _context.Tenants.CountAsync() == 1;
 
-            return _context.Users.Where(u =>
+            return _context.Users
+                .Include(u => u.Area)
+                .Include(u => u.Community)
+                .Where(u =>
                 u.Role == Roles.Customer &&
                 (u.TenantId == tid || (single && u.TenantId == null && tid == firstId)));
         }

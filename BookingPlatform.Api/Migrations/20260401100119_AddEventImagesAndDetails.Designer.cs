@@ -4,6 +4,7 @@ using BookingPlatform.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BookingPlatform.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260401100119_AddEventImagesAndDetails")]
+    partial class AddEventImagesAndDetails
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -447,47 +450,6 @@ namespace BookingPlatform.Api.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("CommunityRules");
-                });
-
-            modelBuilder.Entity("BookingPlatform.Api.Entities.CommunityRulesDocument", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("AreaId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("CommunityId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Html")
-                        .IsRequired()
-                        .HasMaxLength(30000)
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("UpdatedByUserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AreaId");
-
-                    b.HasIndex("CommunityId");
-
-                    b.HasIndex("TenantId");
-
-                    b.HasIndex("UpdatedByUserId");
-
-                    b.ToTable("CommunityRulesDocuments");
                 });
 
             modelBuilder.Entity("BookingPlatform.Api.Entities.Complaint", b =>
@@ -2134,39 +2096,6 @@ namespace BookingPlatform.Api.Migrations
                     b.Navigation("Community");
 
                     b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("BookingPlatform.Api.Entities.CommunityRulesDocument", b =>
-                {
-                    b.HasOne("BookingPlatform.Api.Entities.Area", "Area")
-                        .WithMany()
-                        .HasForeignKey("AreaId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("BookingPlatform.Api.Entities.Community", "Community")
-                        .WithMany()
-                        .HasForeignKey("CommunityId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("BookingPlatform.Api.Entities.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BookingPlatform.Api.Entities.User", "UpdatedByUser")
-                        .WithMany()
-                        .HasForeignKey("UpdatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Area");
-
-                    b.Navigation("Community");
-
-                    b.Navigation("Tenant");
-
-                    b.Navigation("UpdatedByUser");
                 });
 
             modelBuilder.Entity("BookingPlatform.Api.Entities.Complaint", b =>

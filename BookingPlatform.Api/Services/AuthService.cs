@@ -71,7 +71,10 @@ namespace BookingPlatform.Api.Services
 
         public async Task<ApiResponse<UserProfileDto>> GetProfileAsync(int userId)
         {
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _context.Users
+                .Include(u => u.Area)
+                .Include(u => u.Community)
+                .FirstOrDefaultAsync(u => u.Id == userId);
             if (user is null)
                 return ApiResponse<UserProfileDto>.NotFound($"User #{userId} not found.");
 
@@ -84,10 +87,28 @@ namespace BookingPlatform.Api.Services
             if (user is null)
                 return ApiResponse<UserProfileDto>.NotFound($"User #{userId} not found.");
 
-            if (!string.IsNullOrWhiteSpace(req.FirstName))
-                user.FirstName = req.FirstName.Trim();
-            if (!string.IsNullOrWhiteSpace(req.LastName))
-                user.LastName = req.LastName.Trim();
+            if (string.IsNullOrWhiteSpace(req.FirstName) || string.IsNullOrWhiteSpace(req.LastName))
+                return ApiResponse<UserProfileDto>.Fail("First name and last name are required.");
+
+            if (string.IsNullOrWhiteSpace(req.PhoneNumber))
+                return ApiResponse<UserProfileDto>.Fail("Mobile number is required.");
+
+            if (string.IsNullOrWhiteSpace(req.StreetAddress) || string.IsNullOrWhiteSpace(req.City) || string.IsNullOrWhiteSpace(req.State))
+                return ApiResponse<UserProfileDto>.Fail("Street address, city, and state are required.");
+
+            if (string.IsNullOrWhiteSpace(req.CountryName))
+                return ApiResponse<UserProfileDto>.Fail("Country is required.");
+
+            if (!req.AreaId.HasValue || !req.CommunityId.HasValue)
+                return ApiResponse<UserProfileDto>.Fail("Area and community are required.");
+
+            var isUae = req.CountryName.Trim().Equals("United Arab Emirates", StringComparison.OrdinalIgnoreCase)
+                        || req.CountryName.Trim().Equals("UAE", StringComparison.OrdinalIgnoreCase);
+            if (isUae && string.IsNullOrWhiteSpace(req.Emirate))
+                return ApiResponse<UserProfileDto>.Fail("Emirate is required for United Arab Emirates.");
+
+            user.FirstName = req.FirstName.Trim();
+            user.LastName  = req.LastName.Trim();
 
             // Derive FullName from FirstName + LastName for backward compatibility
             var parts    = new[] { user.FirstName, user.LastName }.Where(s => !string.IsNullOrWhiteSpace(s));
@@ -95,12 +116,19 @@ namespace BookingPlatform.Api.Services
             if (!string.IsNullOrWhiteSpace(fullName))
                 user.FullName = fullName;
 
-            user.PhoneNumber = req.PhoneNumber?.Trim();
-            user.Address     = req.Address?.Trim();
-            user.City        = req.City?.Trim();
-            user.State       = req.State?.Trim();
-            user.CountryName = req.CountryName?.Trim();
-            user.PostalCode  = req.PostalCode?.Trim();
+            user.PhoneNumber   = req.PhoneNumber.Trim();
+            user.LandlinePhone = string.IsNullOrWhiteSpace(req.LandlinePhone) ? null : req.LandlinePhone.Trim();
+
+            user.ApartmentOrVillaNumber = string.IsNullOrWhiteSpace(req.ApartmentOrVillaNumber) ? null : req.ApartmentOrVillaNumber.Trim();
+            user.StreetAddress          = req.StreetAddress.Trim();
+            user.City                   = req.City.Trim();
+            user.State                  = req.State.Trim();
+            user.CountryName            = req.CountryName.Trim();
+            user.Emirate                = string.IsNullOrWhiteSpace(req.Emirate) ? null : req.Emirate.Trim();
+            user.PostalCode             = req.PostalCode?.Trim();
+
+            user.AreaId      = req.AreaId;
+            user.CommunityId = req.CommunityId;
 
             await _context.SaveChangesAsync();
 
@@ -132,11 +160,18 @@ namespace BookingPlatform.Api.Services
             FirstName   = u.FirstName,
             LastName    = u.LastName,
             PhoneNumber = u.PhoneNumber,
-            Address     = u.Address,
+            LandlinePhone = u.LandlinePhone,
+            ApartmentOrVillaNumber = u.ApartmentOrVillaNumber,
+            StreetAddress          = u.StreetAddress,
             City        = u.City,
             State       = u.State,
             CountryName = u.CountryName,
+            Emirate     = u.Emirate,
             PostalCode  = u.PostalCode,
+            AreaId = u.AreaId,
+            AreaName = u.Area?.Name,
+            CommunityId = u.CommunityId,
+            CommunityName = u.Community?.Name,
         };
 
         private AuthResponse IssueToken(User user)

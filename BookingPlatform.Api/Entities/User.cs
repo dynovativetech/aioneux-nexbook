@@ -24,12 +24,29 @@ namespace BookingPlatform.Api.Entities
         // ── Extended profile ─────────────────────────────────────────────────
         public string? FirstName   { get; set; }
         public string? LastName    { get; set; }
+        /// <summary>Mobile number (member portal / tenant admin). Keep existing column for backward compatibility.</summary>
         public string? PhoneNumber { get; set; }
-        public string? Address     { get; set; }
-        public string? City        { get; set; }
-        public string? State       { get; set; }
+
+        /// <summary>Local landline number.</summary>
+        public string? LandlinePhone { get; set; }
+
+        public string? ApartmentOrVillaNumber { get; set; }
+        public string? StreetAddress          { get; set; }
+        public string? City                   { get; set; }
+        public string? State                  { get; set; }
+
+        /// <summary>Optional, required when CountryName is UAE.</summary>
+        public string? Emirate { get; set; }
+
         public string? CountryName { get; set; }
         public string? PostalCode  { get; set; }
+
+        /// <summary>Tenant-scoped location for member classification.</summary>
+        public int? AreaId { get; set; }
+        public Area? Area  { get; set; }
+
+        public int? CommunityId { get; set; }
+        public Community? Community { get; set; }
 
         public ICollection<Booking>          Bookings        { get; set; } = new List<Booking>();
         public ICollection<Complaint>        Complaints      { get; set; } = new List<Complaint>();

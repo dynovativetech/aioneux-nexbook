@@ -16,6 +16,10 @@ import ComplaintPage        from './pages/customer/ComplaintPage';
 import VenueListingPage     from './pages/customer/VenueListingPage';
 import VenuePublicPage      from './pages/customer/VenuePublicPage';
 import FacilityBookingPage  from './pages/customer/FacilityBookingPage';
+import CommunityAnnouncementsPage from './pages/customer/CommunityAnnouncementsPage';
+import CommunityEventsPage        from './pages/customer/CommunityEventsPage';
+import CommunityRulesPage         from './pages/customer/CommunityRulesPage';
+import FavoritesPage              from './pages/customer/FavoritesPage';
 
 // TenantAdmin pages
 import AdminDashboardPage       from './pages/admin/AdminDashboardPage';
@@ -30,6 +34,10 @@ import ManageVenuesPage         from './pages/admin/ManageVenuesPage';
 import ManageMembersPage        from './pages/admin/ManageMembersPage';
 import ManageCommunitiesPage    from './pages/admin/ManageCommunitiesPage';
 import NotificationSettingsPage from './pages/admin/NotificationSettingsPage';
+import ManageAnnouncementsPage  from './pages/admin/ManageAnnouncementsPage';
+import ContentAnalyticsPage     from './pages/admin/ContentAnalyticsPage';
+import ManageEventsPage         from './pages/admin/ManageEventsPage';
+import ManageRulesPage          from './pages/admin/ManageRulesPage';
 
 // SuperAdmin pages
 import SuperAdminLayout     from './layouts/SuperAdminLayout';
@@ -94,6 +102,10 @@ function App() {
         </ProtectedRoute>
       }>
         <Route path="/admin"                       element={<AdminDashboardPage />} />
+        <Route path="/admin/announcements"         element={<ManageAnnouncementsPage />} />
+        <Route path="/admin/analytics"             element={<ContentAnalyticsPage />} />
+        <Route path="/admin/events"                element={<ManageEventsPage />} />
+        <Route path="/admin/rules"                 element={<ManageRulesPage />} />
         <Route path="/admin/members"               element={<ManageMembersPage />} />
         <Route path="/admin/bookings"              element={<ManageBookingsPage />} />
         <Route path="/admin/complaints"             element={<ManageComplaintsPage />} />
@@ -133,6 +145,10 @@ function App() {
         <Route path="/my-bookings"       element={<MyBookingsPage />} />
         <Route path="/activity-feed"     element={<ActivityFeedPage />} />
         <Route path="/complaints"        element={<ComplaintPage />} />
+        <Route path="/favorites"         element={<FavoritesPage />} />
+        <Route path="/community/announcements" element={<CommunityAnnouncementsPage />} />
+        <Route path="/community/events"        element={<CommunityEventsPage />} />
+        <Route path="/community/rules"         element={<CommunityRulesPage />} />
       </Route>
 
       {/* Root redirect */}

@@ -1,15 +1,26 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, MapPin, Building2, ChevronRight, Clock,
-  SlidersHorizontal, X,
+  SlidersHorizontal, X, Heart,
 } from 'lucide-react';
 import { venueService, type VenueListItem } from '../../services/venueService';
 import { getCountries, getCities, getAreas, getCommunities } from '../../services/locationService';
 import type { Country, City, Area, Community } from '../../types';
 import Spinner from '../../components/ui/Spinner';
+import { favoriteService } from '../../services/favoriteService';
 
-function VenueCard({ venue, onClick }: { venue: VenueListItem; onClick: () => void }) {
+function VenueCard({
+  venue,
+  onClick,
+  isFavorite,
+  onToggleFavorite,
+}: {
+  venue: VenueListItem;
+  onClick: () => void;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+}) {
   return (
     <button
       onClick={onClick}
@@ -28,6 +39,19 @@ function VenueCard({ venue, onClick }: { venue: VenueListItem; onClick: () => vo
             <Building2 size={40} className="text-gray-200" />
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(); }}
+          className={`absolute top-3 left-3 w-9 h-9 rounded-xl flex items-center justify-center shadow-sm border transition-colors ${
+            isFavorite
+              ? 'bg-white text-rose-600 border-white'
+              : 'bg-white/90 text-gray-500 border-white/60 hover:text-rose-600'
+          }`}
+          aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+        >
+          <Heart size={16} className={isFavorite ? 'fill-current' : ''} />
+        </button>
         {venue.logoUrl && (
           <div className="absolute bottom-3 left-3 w-10 h-10 rounded-xl bg-white shadow-md overflow-hidden border border-white">
             <img src={venue.logoUrl} alt="" className="w-full h-full object-cover" />
@@ -90,6 +114,7 @@ export default function VenueListingPage() {
   const [loading,     setLoading]     = useState(false);
   const [filter,      setFilter]      = useState<FilterState>(EMPTY_FILTER);
   const [showFilters, setShowFilters] = useState(false);
+  const [favVenueIds, setFavVenueIds] = useState<Set<number>>(new Set());
 
   const [countries,   setCountries]   = useState<Country[]>([]);
   const [cities,      setCities]      = useState<City[]>([]);
@@ -97,6 +122,15 @@ export default function VenueListingPage() {
   const [communities, setCommunities] = useState<Community[]>([]);
 
   useEffect(() => { getCountries().then(setCountries).catch(() => {}); }, []);
+  useEffect(() => {
+    favoriteService.list()
+      .then((items) => {
+        const s = new Set<number>();
+        items.filter((f) => f.targetType === 'Venue').forEach((f) => s.add(f.targetId));
+        setFavVenueIds(s);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setCities([]); setAreas([]); setCommunities([]);
@@ -247,9 +281,30 @@ export default function VenueListingPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {venues.map(v => (
-              <VenueCard key={v.id} venue={v} onClick={() => navigate(`/venues/${v.id}`)} />
-            ))}
+            {venues.map(v => {
+              const isFav = favVenueIds.has(v.id);
+              return (
+                <VenueCard
+                  key={v.id}
+                  venue={v}
+                  onClick={() => navigate(`/venues/${v.id}`)}
+                  isFavorite={isFav}
+                  onToggleFavorite={async () => {
+                    try {
+                      if (isFav) await favoriteService.remove('Venue' as any, v.id);
+                      else await favoriteService.add('Venue' as any, v.id);
+                      setFavVenueIds((prev) => {
+                        const next = new Set(prev);
+                        if (isFav) next.delete(v.id); else next.add(v.id);
+                        return next;
+                      });
+                    } catch {
+                      // ignore; Favorites page remains source of truth
+                    }
+                  }}
+                />
+              );
+            })}
           </div>
         )}
       </div>

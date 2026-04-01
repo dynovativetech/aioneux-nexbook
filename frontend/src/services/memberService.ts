@@ -7,29 +7,40 @@ export interface AdminMember {
   email: string;
   firstName?: string;
   lastName?: string;
-  phoneNumber?: string;
+  phoneNumber?: string; // mobile
+  landlinePhone?: string;
   city?: string;
   countryName?: string;
+  areaId?: number;
+  areaName?: string;
+  communityId?: number;
+  communityName?: string;
   isActive: boolean;
 }
 
 export interface AdminMemberDetail extends AdminMember {
-  address?: string;
+  apartmentOrVillaNumber?: string;
+  streetAddress?: string;
   state?: string;
+  emirate?: string;
   postalCode?: string;
 }
 
 export interface CreateMemberPayload {
   email: string;
-  fullName: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  countryName?: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  landlinePhone?: string;
+  apartmentOrVillaNumber?: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  countryName: string;
+  emirate?: string;
   postalCode?: string;
+  areaId: number;
+  communityId: number;
 }
 
 export interface UpdateMemberPayload extends CreateMemberPayload {

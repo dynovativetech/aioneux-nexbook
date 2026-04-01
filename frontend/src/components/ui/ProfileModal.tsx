@@ -5,6 +5,8 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { userService } from '../../services/userService';
 import { updateStoredUser } from '../../services/authService';
+import { locationService } from '../../services/locationService';
+import type { Country, City, Area, Community } from '../../types';
 import Modal from './Modal';
 import Button from './Button';
 
@@ -15,6 +17,12 @@ interface Props {
 }
 
 type Tab = 'profile' | 'password';
+
+const UAE_NAME = 'United Arab Emirates';
+const UAE_CODE = 'AE';
+const EMIRATES = [
+  'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah',
+];
 
 function Field({
   label, value, onChange, placeholder, type = 'text', readOnly = false,
@@ -62,15 +70,34 @@ export default function ProfileModal({ open, onClose, initialTab = 'profile' }: 
   // Profile form state
   const [firstName,   setFirstName]   = useState('');
   const [lastName,    setLastName]    = useState('');
+  const [mobile,      setMobile]      = useState('');
   const [phone,       setPhone]       = useState('');
-  const [address,     setAddress]     = useState('');
+  const [apt,         setApt]         = useState('');
+  const [street,      setStreet]      = useState('');
   const [city,        setCity]        = useState('');
   const [state,       setState]       = useState('');
   const [country,     setCountry]     = useState('');
+  const [emirate,     setEmirate]     = useState('');
   const [postalCode,  setPostalCode]  = useState('');
+  const [areaId,      setAreaId]      = useState<number>(0);
+  const [communityId, setCommunityId] = useState<number>(0);
   const [profileMsg,  setProfileMsg]  = useState('');
   const [profileErr,  setProfileErr]  = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+
+  // Location dropdown state
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
+  const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
+
+  const isUae = (() => {
+    const c = countries.find((x) => x.id === selectedCountryId);
+    if (c?.code?.toUpperCase() === UAE_CODE) return true;
+    return country.trim().toLowerCase() === UAE_NAME.toLowerCase() || country.trim().toUpperCase() === 'UAE';
+  })();
 
   // Password form state
   const [currentPw, setCurrentPw] = useState('');
@@ -80,6 +107,41 @@ export default function ProfileModal({ open, onClose, initialTab = 'profile' }: 
   const [pwMsg,     setPwMsg]     = useState('');
   const [pwErr,     setPwErr]     = useState('');
   const [savingPw,  setSavingPw]  = useState(false);
+
+  // Load countries when modal opens
+  useEffect(() => {
+    if (!open) return;
+    locationService.getCountries()
+      .then((cs) => setCountries(cs))
+      .catch(() => setCountries([]));
+  }, [open]);
+
+  // Load cities when country changes
+  useEffect(() => {
+    if (!open) return;
+    if (!selectedCountryId) { setCities([]); setSelectedCityId(null); return; }
+    locationService.getCities(selectedCountryId)
+      .then((list) => setCities(list))
+      .catch(() => setCities([]));
+  }, [open, selectedCountryId]);
+
+  // Load areas when city changes
+  useEffect(() => {
+    if (!open) return;
+    if (!selectedCityId) { setAreas([]); return; }
+    locationService.getAreas(selectedCityId)
+      .then((list) => setAreas(list))
+      .catch(() => setAreas([]));
+  }, [open, selectedCityId]);
+
+  // Load communities when area changes
+  useEffect(() => {
+    if (!open) return;
+    if (!areaId) { setCommunities([]); return; }
+    locationService.getCommunities(areaId)
+      .then((list) => setCommunities(list))
+      .catch(() => setCommunities([]));
+  }, [open, areaId]);
 
   // Load profile from API when modal opens
   useEffect(() => {
@@ -94,18 +156,38 @@ export default function ProfileModal({ open, onClose, initialTab = 'profile' }: 
           const ln = d.lastName  ?? (user.fullName?.split(' ').slice(1).join(' ') ?? '');
           setFirstName(fn);
           setLastName(ln);
-          setPhone(d.phoneNumber ?? '');
-          setAddress(d.address ?? '');
+          setMobile(d.phoneNumber ?? '');
+          setPhone(d.landlinePhone ?? '');
+          setApt(d.apartmentOrVillaNumber ?? '');
+          setStreet(d.streetAddress ?? '');
           setCity(d.city ?? '');
           setState(d.state ?? '');
           setCountry(d.countryName ?? '');
+          setEmirate(d.emirate ?? '');
           setPostalCode(d.postalCode ?? '');
+          setAreaId(d.areaId ?? 0);
+          setCommunityId(d.communityId ?? 0);
+
+          const matchCountry = countries.find((c) => c.name.toLowerCase() === (d.countryName ?? '').toLowerCase());
+          setSelectedCountryId(matchCountry?.id ?? null);
+          // we'll set city id once cities load
+          setSelectedCityId(null);
         }
       })
       .catch(() => { /* use stored user values */ })
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // When cities load, auto-select the one matching the stored city text
+  useEffect(() => {
+    if (!open) return;
+    if (!cities.length) return;
+    if (selectedCityId) return;
+    if (!city.trim()) return;
+    const match = cities.find((c) => c.name.toLowerCase() === city.trim().toLowerCase());
+    if (match) setSelectedCityId(match.id);
+  }, [open, cities, selectedCityId, city]);
 
   // Sync tab when initialTab prop changes
   useEffect(() => { setTab(initialTab); }, [initialTab]);
@@ -128,8 +210,21 @@ export default function ProfileModal({ open, onClose, initialTab = 'profile' }: 
   async function handleProfileSave(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
-    if (!firstName.trim() && !lastName.trim()) {
-      setProfileErr('Please enter at least a first name or last name.');
+    const missing: string[] = [];
+    if (!firstName.trim()) missing.push('First name');
+    if (!lastName.trim()) missing.push('Last name');
+    if (!mobile.trim()) missing.push('Mobile number');
+    // phone is optional
+    if (!street.trim()) missing.push('Street address');
+    if (!city.trim()) missing.push('City');
+    if (!state.trim()) missing.push('State');
+    if (!country.trim()) missing.push('Country');
+    if (!areaId) missing.push('Area');
+    if (!communityId) missing.push('Community');
+    if (isUae && !emirate.trim()) missing.push('Emirate');
+
+    if (missing.length) {
+      setProfileErr(`${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required.`);
       return;
     }
     setProfileErr(''); setProfileMsg('');
@@ -137,14 +232,19 @@ export default function ProfileModal({ open, onClose, initialTab = 'profile' }: 
     try {
       const res = await userService.updateProfile({
         userId:      user.id,
-        firstName:   firstName.trim() || undefined,
-        lastName:    lastName.trim()  || undefined,
-        phoneNumber: phone.trim()     || undefined,
-        address:     address.trim()   || undefined,
-        city:        city.trim()      || undefined,
-        state:       state.trim()     || undefined,
-        countryName: country.trim()   || undefined,
+        firstName:   firstName.trim(),
+        lastName:    lastName.trim(),
+        phoneNumber: mobile.trim(),
+        landlinePhone: phone.trim() || undefined,
+        apartmentOrVillaNumber: apt.trim() || undefined,
+        streetAddress: street.trim(),
+        city:        city.trim(),
+        state:       state.trim(),
+        countryName: country.trim(),
+        emirate: emirate.trim() || undefined,
         postalCode:  postalCode.trim()|| undefined,
+        areaId,
+        communityId,
       });
 
       if (res.success && res.data) {
@@ -153,11 +253,18 @@ export default function ProfileModal({ open, onClose, initialTab = 'profile' }: 
           firstName:   res.data.firstName,
           lastName:    res.data.lastName,
           phoneNumber: res.data.phoneNumber,
-          address:     res.data.address,
+          landlinePhone: res.data.landlinePhone,
+          apartmentOrVillaNumber: res.data.apartmentOrVillaNumber,
+          streetAddress: res.data.streetAddress,
           city:        res.data.city,
           state:       res.data.state,
           countryName: res.data.countryName,
+          emirate:     res.data.emirate,
           postalCode:  res.data.postalCode,
+          areaId:      res.data.areaId,
+          areaName:    res.data.areaName,
+          communityId: res.data.communityId,
+          communityName: res.data.communityName,
         });
         refreshUser();
         setProfileMsg('Profile updated successfully.');
@@ -290,8 +397,14 @@ export default function ProfileModal({ open, onClose, initialTab = 'profile' }: 
 
               {/* Phone */}
               <Field
-                label="Mobile / Phone" value={phone}
-                onChange={setPhone} placeholder="+971 50 000 0000"
+                label="Mobile number" value={mobile}
+                onChange={setMobile} placeholder="+971 50 000 0000"
+                icon={<Phone size={14} />}
+                required
+              />
+              <Field
+                label="Phone" value={phone}
+                onChange={setPhone} placeholder="04 000 0000"
                 icon={<Phone size={14} />}
               />
 
@@ -300,35 +413,134 @@ export default function ProfileModal({ open, onClose, initialTab = 'profile' }: 
                   Address Information
                 </p>
 
-                {/* Address */}
                 <div className="space-y-3">
                   <Field
-                    label="Street address" value={address}
-                    onChange={setAddress} placeholder="Building / Street / Area"
+                    label="Apartment / Villa no." value={apt}
+                    onChange={setApt} placeholder="Apt 1203"
+                  />
+                  <Field
+                    label="Street address" value={street}
+                    onChange={setStreet} placeholder="Street address"
                     icon={<MapPin size={14} />}
+                    required
                   />
 
                   <div className="grid grid-cols-2 gap-3">
-                    <Field
-                      label="City" value={city}
-                      onChange={setCity} placeholder="Dubai"
-                    />
-                    <Field
-                      label="State / Emirate" value={state}
-                      onChange={setState} placeholder="Dubai"
-                    />
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                        Country<span className="text-red-500 ml-0.5">*</span>
+                      </label>
+                      <select
+                        value={selectedCountryId ?? ''}
+                        onChange={(e) => {
+                          const id = e.target.value ? Number(e.target.value) : null;
+                          setSelectedCountryId(id);
+                          const c = countries.find((x) => x.id === id);
+                          setCountry(c?.name ?? '');
+                          setSelectedCityId(null);
+                          setCity('');
+                          setAreaId(0);
+                          setCommunityId(0);
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0078D7]/20 focus:border-[#0078D7]"
+                      >
+                        <option value="">Select country</option>
+                        {countries.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                        City<span className="text-red-500 ml-0.5">*</span>
+                      </label>
+                      <select
+                        value={selectedCityId ?? ''}
+                        onChange={(e) => {
+                          const id = e.target.value ? Number(e.target.value) : null;
+                          setSelectedCityId(id);
+                          const c = cities.find((x) => x.id === id);
+                          setCity(c?.name ?? '');
+                          setAreaId(0);
+                          setCommunityId(0);
+                        }}
+                        disabled={!selectedCountryId}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="">{selectedCountryId ? 'Select city' : 'Select country first'}</option>
+                        {cities.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <Field
-                      label="Country" value={country}
-                      onChange={setCountry} placeholder="United Arab Emirates"
+                      label="State" value={state}
+                      onChange={setState} placeholder="Dubai"
+                      required
                     />
-                    <Field
-                      label="PO Box / Postal code" value={postalCode}
-                      onChange={setPostalCode} placeholder="00000"
-                    />
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                        Emirate{isUae ? <span className="text-red-500 ml-0.5">*</span> : null}
+                      </label>
+                      <select
+                        value={emirate}
+                        onChange={(e) => setEmirate(e.target.value)}
+                        disabled={!isUae}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="">{isUae ? 'Select emirate' : 'Only for UAE'}</option>
+                        {EMIRATES.map((x) => (
+                          <option key={x} value={x}>{x}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                        Area<span className="text-red-500 ml-0.5">*</span>
+                      </label>
+                      <select
+                        value={areaId || ''}
+                        onChange={(e) => {
+                          setAreaId(Number(e.target.value));
+                          setCommunityId(0);
+                        }}
+                        disabled={!selectedCityId}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="">{selectedCityId ? 'Select area' : 'Select city first'}</option>
+                        {areas.map((a) => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                        Community<span className="text-red-500 ml-0.5">*</span>
+                      </label>
+                      <select
+                        value={communityId || ''}
+                        onChange={(e) => setCommunityId(Number(e.target.value))}
+                        disabled={!areaId}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="">{areaId ? 'Select community' : 'Select area first'}</option>
+                        {communities.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <Field
+                    label="PO Box / Postal code" value={postalCode}
+                    onChange={setPostalCode} placeholder="00000"
+                  />
                 </div>
               </div>
             </>

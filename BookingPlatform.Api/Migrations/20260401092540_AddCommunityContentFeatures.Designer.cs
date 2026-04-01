@@ -4,6 +4,7 @@ using BookingPlatform.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BookingPlatform.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260401092540_AddCommunityContentFeatures")]
+    partial class AddCommunityContentFeatures
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -449,47 +452,6 @@ namespace BookingPlatform.Api.Migrations
                     b.ToTable("CommunityRules");
                 });
 
-            modelBuilder.Entity("BookingPlatform.Api.Entities.CommunityRulesDocument", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("AreaId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("CommunityId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Html")
-                        .IsRequired()
-                        .HasMaxLength(30000)
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("UpdatedByUserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AreaId");
-
-                    b.HasIndex("CommunityId");
-
-                    b.HasIndex("TenantId");
-
-                    b.HasIndex("UpdatedByUserId");
-
-                    b.ToTable("CommunityRulesDocuments");
-                });
-
             modelBuilder.Entity("BookingPlatform.Api.Entities.Complaint", b =>
                 {
                     b.Property<int>("Id")
@@ -653,27 +615,11 @@ namespace BookingPlatform.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AddressText")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<int?>("AreaId")
                         .HasColumnType("int");
 
                     b.Property<int?>("CommunityId")
                         .HasColumnType("int");
-
-                    b.Property<string>("ContactPersonEmail")
-                        .HasMaxLength(254)
-                        .HasColumnType("nvarchar(254)");
-
-                    b.Property<string>("ContactPersonName")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("ContactPersonPhone")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -695,10 +641,6 @@ namespace BookingPlatform.Api.Migrations
                     b.Property<string>("LocationText")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
-
-                    b.Property<string>("MainImageUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime>("StartsAt")
                         .HasColumnType("datetime2");
@@ -729,48 +671,6 @@ namespace BookingPlatform.Api.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("Events");
-                });
-
-            modelBuilder.Entity("BookingPlatform.Api.Entities.EventImage", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int>("EventId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("IsPrimary")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("OriginalFileName")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UploadedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EventId");
-
-                    b.ToTable("EventImages");
                 });
 
             modelBuilder.Entity("BookingPlatform.Api.Entities.EventRsvp", b =>
@@ -2136,39 +2036,6 @@ namespace BookingPlatform.Api.Migrations
                     b.Navigation("Tenant");
                 });
 
-            modelBuilder.Entity("BookingPlatform.Api.Entities.CommunityRulesDocument", b =>
-                {
-                    b.HasOne("BookingPlatform.Api.Entities.Area", "Area")
-                        .WithMany()
-                        .HasForeignKey("AreaId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("BookingPlatform.Api.Entities.Community", "Community")
-                        .WithMany()
-                        .HasForeignKey("CommunityId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("BookingPlatform.Api.Entities.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BookingPlatform.Api.Entities.User", "UpdatedByUser")
-                        .WithMany()
-                        .HasForeignKey("UpdatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Area");
-
-                    b.Navigation("Community");
-
-                    b.Navigation("Tenant");
-
-                    b.Navigation("UpdatedByUser");
-                });
-
             modelBuilder.Entity("BookingPlatform.Api.Entities.Complaint", b =>
                 {
                     b.HasOne("BookingPlatform.Api.Entities.Booking", "Booking")
@@ -2263,17 +2130,6 @@ namespace BookingPlatform.Api.Migrations
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("BookingPlatform.Api.Entities.EventImage", b =>
-                {
-                    b.HasOne("BookingPlatform.Api.Entities.Event", "Event")
-                        .WithMany("Images")
-                        .HasForeignKey("EventId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Event");
                 });
 
             modelBuilder.Entity("BookingPlatform.Api.Entities.EventRsvp", b =>
@@ -2704,8 +2560,6 @@ namespace BookingPlatform.Api.Migrations
 
             modelBuilder.Entity("BookingPlatform.Api.Entities.Event", b =>
                 {
-                    b.Navigation("Images");
-
                     b.Navigation("Rsvps");
                 });
 

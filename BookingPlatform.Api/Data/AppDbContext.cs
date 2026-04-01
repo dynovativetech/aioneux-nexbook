@@ -60,6 +60,17 @@ namespace BookingPlatform.Api.Data
         public DbSet<AuditLog>             AuditLogs              { get; set; }
         public DbSet<NotificationLog>      NotificationLogs       { get; set; }
 
+        // ── Community & engagement ──────────────────────────────────────────
+        public DbSet<Announcement>         Announcements          { get; set; }
+        public DbSet<AnnouncementView>     AnnouncementViews      { get; set; }
+        public DbSet<Event>                Events                 { get; set; }
+        public DbSet<EventRsvp>            EventRsvps             { get; set; }
+        public DbSet<EventImage>           EventImages            { get; set; }
+        public DbSet<CommunityRule>        CommunityRules         { get; set; }
+        public DbSet<CommunityRulesDocument> CommunityRulesDocuments { get; set; }
+        public DbSet<UserFavorite>         UserFavorites          { get; set; }
+        public DbSet<Feedback>             Feedback               { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -156,6 +167,18 @@ namespace BookingPlatform.Api.Data
                 entity.HasOne(u => u.Tenant)
                     .WithMany(t => t.Users)
                     .HasForeignKey(u => u.TenantId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(u => u.Area)
+                    .WithMany()
+                    .HasForeignKey(u => u.AreaId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(u => u.Community)
+                    .WithMany()
+                    .HasForeignKey(u => u.CommunityId)
                     .IsRequired(false)
                     .OnDelete(DeleteBehavior.Restrict);
 
@@ -658,6 +681,233 @@ namespace BookingPlatform.Api.Data
                 entity.HasIndex(n => n.EventType);
 
                 entity.HasQueryFilter(n => _tenantContext == null || _tenantContext.IsSuperAdmin || n.TenantId == _tenantContext.TenantId);
+            });
+
+            // ── Announcement ───────────────────────────────────────────────────
+            modelBuilder.Entity<Announcement>(entity =>
+            {
+                entity.HasOne(a => a.Tenant)
+                    .WithMany()
+                    .HasForeignKey(a => a.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(a => a.Area)
+                    .WithMany()
+                    .HasForeignKey(a => a.AreaId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(a => a.Community)
+                    .WithMany()
+                    .HasForeignKey(a => a.CommunityId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(a => a.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(a => a.CreatedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Property(a => a.Title).HasMaxLength(200).IsRequired();
+                entity.Property(a => a.Body).HasMaxLength(8000).IsRequired();
+
+                entity.HasIndex(a => a.TenantId);
+                entity.HasIndex(a => a.IsPublished);
+                entity.HasIndex(a => a.PublishAt);
+
+                entity.HasQueryFilter(a => _tenantContext == null || _tenantContext.IsSuperAdmin || a.TenantId == _tenantContext.TenantId);
+            });
+
+            modelBuilder.Entity<AnnouncementView>(entity =>
+            {
+                entity.HasOne(v => v.Announcement)
+                    .WithMany(a => a.Views)
+                    .HasForeignKey(v => v.AnnouncementId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(v => v.User)
+                    .WithMany()
+                    .HasForeignKey(v => v.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(v => new { v.AnnouncementId, v.UserId }).IsUnique();
+                entity.HasIndex(v => v.UserId);
+            });
+
+            // ── Event ──────────────────────────────────────────────────────────
+            modelBuilder.Entity<Event>(entity =>
+            {
+                entity.HasOne(e => e.Tenant)
+                    .WithMany()
+                    .HasForeignKey(e => e.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Area)
+                    .WithMany()
+                    .HasForeignKey(e => e.AreaId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Community)
+                    .WithMany()
+                    .HasForeignKey(e => e.CommunityId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Description).HasMaxLength(8000).IsRequired();
+                entity.Property(e => e.LocationText).HasMaxLength(300);
+                entity.Property(e => e.MainImageUrl).HasMaxLength(500);
+                entity.Property(e => e.AddressText).HasMaxLength(500);
+                entity.Property(e => e.ContactPersonName).HasMaxLength(150);
+                entity.Property(e => e.ContactPersonEmail).HasMaxLength(254);
+                entity.Property(e => e.ContactPersonPhone).HasMaxLength(30);
+
+                entity.HasIndex(e => e.TenantId);
+                entity.HasIndex(e => e.StartsAt);
+                entity.HasIndex(e => e.IsPublished);
+
+                entity.HasQueryFilter(e => _tenantContext == null || _tenantContext.IsSuperAdmin || e.TenantId == _tenantContext.TenantId);
+            });
+
+            modelBuilder.Entity<EventImage>(entity =>
+            {
+                entity.HasOne(i => i.Event)
+                    .WithMany(e => e.Images)
+                    .HasForeignKey(i => i.EventId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.Property(i => i.FileName).HasMaxLength(500).IsRequired();
+                entity.Property(i => i.OriginalFileName).HasMaxLength(500).IsRequired();
+                entity.Property(i => i.ContentType).HasMaxLength(100).IsRequired();
+
+                entity.HasIndex(i => i.EventId);
+            });
+
+            modelBuilder.Entity<EventRsvp>(entity =>
+            {
+                entity.HasOne(r => r.Event)
+                    .WithMany(e => e.Rsvps)
+                    .HasForeignKey(r => r.EventId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(r => r.User)
+                    .WithMany()
+                    .HasForeignKey(r => r.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(r => new { r.EventId, r.UserId }).IsUnique();
+                entity.HasIndex(r => r.UserId);
+            });
+
+            // ── CommunityRule ─────────────────────────────────────────────────
+            modelBuilder.Entity<CommunityRule>(entity =>
+            {
+                entity.HasOne(r => r.Tenant)
+                    .WithMany()
+                    .HasForeignKey(r => r.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(r => r.Area)
+                    .WithMany()
+                    .HasForeignKey(r => r.AreaId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(r => r.Community)
+                    .WithMany()
+                    .HasForeignKey(r => r.CommunityId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Property(r => r.Title).HasMaxLength(200).IsRequired();
+                entity.Property(r => r.Body).HasMaxLength(8000).IsRequired();
+
+                entity.HasIndex(r => r.TenantId);
+                entity.HasIndex(r => r.IsActive);
+                entity.HasIndex(r => r.SortOrder);
+
+                entity.HasQueryFilter(r => _tenantContext == null || _tenantContext.IsSuperAdmin || r.TenantId == _tenantContext.TenantId);
+            });
+
+            // ── CommunityRulesDocument (single formatted page) ───────────────
+            modelBuilder.Entity<CommunityRulesDocument>(entity =>
+            {
+                entity.HasOne(d => d.Tenant)
+                    .WithMany()
+                    .HasForeignKey(d => d.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(d => d.Area)
+                    .WithMany()
+                    .HasForeignKey(d => d.AreaId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(d => d.Community)
+                    .WithMany()
+                    .HasForeignKey(d => d.CommunityId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(d => d.UpdatedByUser)
+                    .WithMany()
+                    .HasForeignKey(d => d.UpdatedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Property(d => d.Html).HasMaxLength(30000).IsRequired();
+
+                entity.HasIndex(d => d.TenantId);
+                entity.HasIndex(d => d.CommunityId);
+
+                entity.HasQueryFilter(d => _tenantContext == null || _tenantContext.IsSuperAdmin || d.TenantId == _tenantContext.TenantId);
+            });
+
+            // ── UserFavorite ──────────────────────────────────────────────────
+            modelBuilder.Entity<UserFavorite>(entity =>
+            {
+                entity.HasOne(f => f.Tenant)
+                    .WithMany()
+                    .HasForeignKey(f => f.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(f => f.User)
+                    .WithMany()
+                    .HasForeignKey(f => f.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(f => f.TenantId);
+                entity.HasIndex(f => f.UserId);
+                entity.HasIndex(f => new { f.UserId, f.TargetType, f.TargetId }).IsUnique();
+
+                entity.HasQueryFilter(f => _tenantContext == null || _tenantContext.IsSuperAdmin || f.TenantId == _tenantContext.TenantId);
+            });
+
+            // ── Feedback ──────────────────────────────────────────────────────
+            modelBuilder.Entity<Feedback>(entity =>
+            {
+                entity.HasOne(f => f.Tenant)
+                    .WithMany()
+                    .HasForeignKey(f => f.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(f => f.User)
+                    .WithMany()
+                    .HasForeignKey(f => f.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.Property(f => f.Comment).HasMaxLength(2000);
+
+                entity.HasIndex(f => f.TenantId);
+                entity.HasIndex(f => f.UserId);
+                entity.HasIndex(f => new { f.UserId, f.TargetType, f.TargetId }).IsUnique();
+
+                entity.HasQueryFilter(f => _tenantContext == null || _tenantContext.IsSuperAdmin || f.TenantId == _tenantContext.TenantId);
             });
 
             // ── TenantEmailSettings ───────────────────────────────────────────

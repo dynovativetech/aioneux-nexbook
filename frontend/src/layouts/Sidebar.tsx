@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, CalendarPlus, CalendarDays, MessageSquareWarning,
   Building2, UserCheck, Dumbbell, ShieldCheck, X, CalendarCheck, Shield,
-  MapPin, Bell, Search, Tag, Activity, Users,
+  MapPin, Bell, Search, Tag, Activity, Users, Megaphone, BarChart3, ScrollText, Heart,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,6 +15,10 @@ const customerLinks = [
   { to: '/my-bookings',    icon: CalendarDays,         label: 'My Bookings' },
   { to: '/activity-feed',  icon: Activity,             label: 'Activity Feed' },
   { to: '/complaints',     icon: MessageSquareWarning, label: 'My Complaints' },
+  { to: '/favorites',      icon: Heart,                label: 'Favorites' },
+  { to: '/community/announcements', icon: Megaphone,   label: 'Announcements' },
+  { to: '/community/events',        icon: CalendarDays, label: 'Events' },
+  { to: '/community/rules',         icon: ScrollText,  label: 'Rules' },
 ];
 
 type NavGroup = { group: string; items: { to: string; icon: React.ElementType; label: string }[] };
@@ -37,6 +41,9 @@ const adminNavGroups: NavGroup[] = [
     group: 'Manage',
     items: [
       { to: '/admin/members', icon: Users, label: 'Members' },
+      { to: '/admin/announcements',         icon: Megaphone,  label: 'Announcements' },
+      { to: '/admin/events',                icon: CalendarDays, label: 'Events' },
+      { to: '/admin/rules',                 icon: ScrollText, label: 'Rules' },
       { to: '/admin/bookings',              icon: CalendarDays,         label: 'Bookings' },
       { to: '/admin/complaints',            icon: MessageSquareWarning, label: 'Complaints' },
       { to: '/admin/complaint-categories',  icon: Tag,                  label: 'Complaint Categories' },
@@ -48,6 +55,7 @@ const adminNavGroups: NavGroup[] = [
   {
     group: 'System',
     items: [
+      { to: '/admin/analytics',      icon: BarChart3, label: 'Analytics' },
       { to: '/admin/notifications', icon: Bell,   label: 'Notifications' },
       { to: '/admin/audit',         icon: Shield, label: 'Audit Trail' },
     ],

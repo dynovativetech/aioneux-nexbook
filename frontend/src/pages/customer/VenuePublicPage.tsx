@@ -1,14 +1,16 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   MapPin, Phone, Mail, Globe, Clock, Building2,
   ChevronLeft, ChevronRight, Layers, CheckCircle2, ArrowRight,
-  X, ZoomIn, ZoomOut, Maximize2, Images,
+  X, ZoomIn, ZoomOut, Maximize2, Images, Heart,
 } from 'lucide-react';
 import { venueService, type VenueDetail } from '../../services/venueService';
 import { facilityService } from '../../services/facilityService';
 import type { Facility } from '../../types';
 import Spinner from '../../components/ui/Spinner';
+import FeedbackPanel from '../../components/ui/FeedbackPanel';
+import { favoriteService } from '../../services/favoriteService';
 
 // The API serializes DayOfWeek as a string ("Sunday", "Monday", …) via JsonStringEnumConverter
 const DAY_ORDERED = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -422,7 +424,17 @@ function ImageGallery({ images, coverImageUrl, name }: {
 
 // ── Facility Row ──────────────────────────────────────────────────────────────
 
-function FacilityListCard({ facility, onBook }: { facility: Facility; onBook: () => void }) {
+function FacilityListCard({
+  facility,
+  onBook,
+  isFavorite,
+  onToggleFavorite,
+}: {
+  facility: Facility;
+  onBook: () => void;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+}) {
   const linked = facility.facilityActivities ?? [];
 
   return (
@@ -465,6 +477,20 @@ function FacilityListCard({ facility, onBook }: { facility: Facility; onBook: ()
         <div>{facility.slotDurationMinutes ?? 60} min slots</div>
       </div>
 
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(); }}
+        className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-colors flex-shrink-0 ${
+          isFavorite
+            ? 'bg-white text-rose-600 border-rose-100'
+            : 'bg-white text-gray-500 border-gray-100 hover:text-rose-600'
+        }`}
+        aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+      >
+        <Heart size={16} className={isFavorite ? 'fill-current' : ''} />
+      </button>
+
       {facility.isActive && (
         <button
           onClick={onBook}
@@ -486,6 +512,8 @@ export default function VenuePublicPage() {
   const [venue,      setVenue]      = useState<VenueDetail | null>(null);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [loading,    setLoading]    = useState(true);
+  const [favVenueIds, setFavVenueIds] = useState<Set<number>>(new Set());
+  const [favFacilityIds, setFavFacilityIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!id) return;
@@ -499,6 +527,21 @@ export default function VenuePublicPage() {
       setFacilities(Array.isArray(f) ? f : []);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    favoriteService.list()
+      .then((items) => {
+        const venueSet = new Set<number>();
+        const facSet = new Set<number>();
+        items.forEach((f) => {
+          if (f.targetType === 'Venue') venueSet.add(f.targetId);
+          if (f.targetType === 'Facility') facSet.add(f.targetId);
+        });
+        setFavVenueIds(venueSet);
+        setFavFacilityIds(facSet);
+      })
+      .catch(() => {});
+  }, []);
 
   if (loading) return <Spinner fullPage />;
   if (!venue) return (
@@ -545,6 +588,32 @@ export default function VenuePublicPage() {
                   {venue.communityName} · {venue.address}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const isFav = favVenueIds.has(venue.id);
+                    if (isFav) await favoriteService.remove('Venue' as any, venue.id);
+                    else await favoriteService.add('Venue' as any, venue.id);
+                    setFavVenueIds((prev) => {
+                      const next = new Set(prev);
+                      if (isFav) next.delete(venue.id); else next.add(venue.id);
+                      return next;
+                    });
+                  } catch {
+                    // ignore
+                  }
+                }}
+                className={`ml-auto w-10 h-10 rounded-xl flex items-center justify-center border transition-colors ${
+                  favVenueIds.has(venue.id)
+                    ? 'bg-white text-rose-600 border-rose-100'
+                    : 'bg-white text-gray-500 border-gray-100 hover:text-rose-600'
+                }`}
+                aria-label={favVenueIds.has(venue.id) ? 'Remove from favorites' : 'Add to favorites'}
+                title={favVenueIds.has(venue.id) ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                <Heart size={18} className={favVenueIds.has(venue.id) ? 'fill-current' : ''} />
+              </button>
             </div>
             {venue.shortDescription && (
               <p className="text-gray-700 text-sm font-medium">{venue.shortDescription}</p>
@@ -570,6 +639,21 @@ export default function VenuePublicPage() {
                     key={f.id}
                     facility={f}
                     onBook={() => navigate(`/book?venueId=${venue.id}&facilityId=${f.id}`)}
+                    isFavorite={favFacilityIds.has(f.id)}
+                    onToggleFavorite={async () => {
+                      try {
+                        const isFav = favFacilityIds.has(f.id);
+                        if (isFav) await favoriteService.remove('Facility' as any, f.id);
+                        else await favoriteService.add('Facility' as any, f.id);
+                        setFavFacilityIds((prev) => {
+                          const next = new Set(prev);
+                          if (isFav) next.delete(f.id); else next.add(f.id);
+                          return next;
+                        });
+                      } catch {
+                        // ignore
+                      }
+                    }}
                   />
                 ))}
               </div>
@@ -591,6 +675,8 @@ export default function VenuePublicPage() {
               </div>
             </div>
           )}
+
+          <FeedbackPanel targetType="Venue" targetId={venue.id} />
         </div>
 
         {/* ── Right column ── */}

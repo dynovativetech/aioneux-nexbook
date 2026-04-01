@@ -11,12 +11,22 @@ export interface User {
   // Extended profile fields
   firstName?: string;
   lastName?: string;
+  /** Mobile number */
   phoneNumber?: string;
-  address?: string;
+  /** Local landline number */
+  landlinePhone?: string;
+
+  apartmentOrVillaNumber?: string;
+  streetAddress?: string;
   city?: string;
   state?: string;
   countryName?: string;
+  emirate?: string;
   postalCode?: string;
+  areaId?: number;
+  areaName?: string;
+  communityId?: number;
+  communityName?: string;
 }
 
 export interface UserProfileDto {
@@ -26,23 +36,35 @@ export interface UserProfileDto {
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
-  address?: string;
+  landlinePhone?: string;
+  apartmentOrVillaNumber?: string;
+  streetAddress?: string;
   city?: string;
   state?: string;
   countryName?: string;
+  emirate?: string;
   postalCode?: string;
+  areaId?: number;
+  areaName?: string;
+  communityId?: number;
+  communityName?: string;
 }
 
 export interface UpdateProfileRequest {
   userId: number;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  countryName?: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  landlinePhone?: string;
+  apartmentOrVillaNumber?: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  countryName: string;
+  emirate?: string;
   postalCode?: string;
+  areaId: number;
+  communityId: number;
 }
 
 export interface AuthResponse {
